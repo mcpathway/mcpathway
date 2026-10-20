@@ -1,0 +1,627 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #16211c;
+  background: #f4f7f3;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.login-card {
+  width: min(100%, 26rem);
+  padding: 2rem;
+  background: #ffffff;
+  border: 1px solid #dce6dd;
+  border-radius: 1rem;
+  box-shadow: 0 1rem 2.5rem rgb(29 66 40 / 10%);
+}
+
+.brand {
+  margin: 0 0 .5rem;
+  color: #12603a;
+  font-size: 1.55rem;
+}
+.lead {
+  margin: 0 0 1.75rem;
+  color: #526259;
+  line-height: 1.5;
+}
+
+.field {
+  display: grid;
+  gap: .45rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+input {
+  width: 100%;
+  padding: .75rem .85rem;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #aebeb1;
+  border-radius: .5rem;
+}
+
+textarea {
+  width: 100%;
+  padding: .75rem .85rem;
+  resize: vertical;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #aebeb1;
+  border-radius: .5rem;
+}
+
+input:focus,
+textarea:focus {
+  outline: 3px solid #b7e2c8;
+  border-color: #12603a;
+}
+
+.button {
+  width: 100%;
+  padding: .75rem 1rem;
+  color: #fff;
+  background: #12603a;
+  border: 1px solid #12603a;
+  border-radius: .5rem;
+  font-weight: 700;
+}
+
+.button:hover {
+  background: #0a4b2b;
+}
+.button:disabled {
+  cursor: wait;
+  opacity: .68;
+}
+
+.message {
+  min-height: 1.5rem;
+  margin: 1rem 0 0;
+  color: #9b251b;
+  line-height: 1.4;
+}
+.message[data-kind="info"] {
+  color: #526259;
+}
+
+.dashboard {
+  /**max-width: 70rem;**/
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #dce6dd;
+}
+
+.topbar h1 {
+  margin: 0;
+  color: #12603a;
+  font-size: 1.4rem;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  color: #526259;
+}
+
+.button-secondary {
+  width: auto;
+  color: #12603a;
+  background: #fff;
+  border-color: #76a88a;
+}
+
+.button-secondary:hover {
+  color: #fff;
+  background: #12603a;
+}
+
+.dashboard-content {
+  padding-top: 2rem;
+}
+.dashboard-content h2 {
+  margin: 0 0 .45rem;
+}
+.dashboard-content p {
+  margin: 0 0 1.5rem;
+  color: #526259;
+  line-height: 1.5;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+}
+
+.module-card {
+  min-height: 8rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #dce6dd;
+  border-radius: .75rem;
+}
+
+.module-card h3 {
+  margin: 0 0 .5rem;
+  font-size: 1rem;
+}
+.module-card p {
+  margin: 0;
+  font-size: .92rem;
+}
+
+.module-card-action {
+  display: flex;
+  flex-direction: column;
+}
+
+.module-card-action .button {
+  margin-top: auto;
+}
+
+.button-small {
+  padding: .55rem .75rem;
+  font-size: .92rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.text-button {
+  padding: 0;
+  color: #12603a;
+  background: transparent;
+  border: 0;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+
+.text-button:hover {
+  color: #0a4b2b;
+}
+
+.text-button-danger {
+  color: #a4261d;
+}
+
+.management-grid {
+  display: grid;
+  grid-template-columns: minmax(15rem, 22rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.editor-card,
+.list-card {
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid #dce6dd;
+  border-radius: .75rem;
+}
+
+.editor-card h3,
+.list-card h3 {
+  margin: 0 0 1rem;
+}
+
+.editor-card p {
+  margin: 0;
+}
+
+.field-hint {
+  color: #68776d;
+  font-size: .85em;
+  font-weight: 500;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: 1rem 0;
+  font-weight: 600;
+}
+
+.checkbox-field input {
+  width: auto;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+.form-actions .button {
+  width: auto;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+th,
+td {
+  padding: .8rem .7rem;
+  border-bottom: 1px solid #e5ece6;
+  vertical-align: top;
+}
+
+th {
+  color: #526259;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.row-actions {
+  display: flex;
+  gap: .75rem;
+  white-space: nowrap;
+}
+
+.status {
+  display: inline-block;
+  padding: .2rem .5rem;
+  border-radius: 99rem;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.status-active {
+  color: #0d5732;
+  background: #dff3e5;
+}
+
+.status-inactive {
+  color: #5a5552;
+  background: #eeeae6;
+}
+
+.empty-state {
+  grid-column: 2;
+}
+
+.error-panel {
+  padding: 1rem;
+  color: #9b251b;
+  background: #fff2f0;
+  border: 1px solid #f1c1bc;
+  border-radius: .75rem;
+}
+
+.screen-reader-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.loading {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: #526259;
+}
+
+@media (max-width: 38rem) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .account {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-state {
+    grid-column: auto;
+  }
+}
+
+select {
+  width: 100%;
+  padding: .75rem .85rem;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #aebeb1;
+  border-radius: .5rem;
+  font: inherit;
+}
+
+select:focus {
+  outline: 3px solid #b7e2c8;
+  border-color: #12603a;
+}
+
+/* "Add member" sits beside the page title; keep it its natural width. */
+.section-header > .button {
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* ---- Search + export toolbar ---- */
+.list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.list-toolbar input[type="search"] {
+  flex: 1 1 14rem;
+  max-width: 24rem;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+}
+
+.toolbar-actions .checkbox-field {
+  margin: 0;
+}
+
+.list-card .message {
+  min-height: 0;
+  margin: 0 0 .75rem;
+}
+
+.list-card .message:empty {
+  display: none;
+}
+
+#members-results[aria-busy="true"] {
+  opacity: .55;
+  transition: opacity .15s;
+}
+
+.empty-results {
+  padding: 1.5rem .5rem;
+  text-align: center;
+}
+
+.empty-results h3 {
+  margin: 0 0 .5rem;
+}
+
+.empty-results p {
+  margin: 0;
+  color: #526259;
+}
+
+/* ---- Status tags and deleted rows ---- */
+.status-warning {
+  color: #7a4a00;
+  background: #fdebc8;
+}
+
+.row-deleted td {
+  color: #7a726d;
+  background: #faf8f6;
+}
+
+.row-deleted td strong {
+  font-weight: 600;
+  text-decoration: line-through;
+}
+
+/* ---- Pager ---- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5ece6;
+}
+
+.pager-info {
+  color: #526259;
+  font-size: .92rem;
+  text-align: center;
+}
+
+.pager .button {
+  min-width: 6.5rem;
+}
+
+/* ---- Add / edit form ---- */
+.form-card {
+  max-width: 46rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1rem;
+}
+
+.form-grid .field-wide {
+  grid-column: 1 / -1;
+}
+
+.form-card .form-actions {
+  margin-top: .5rem;
+}
+
+/* ---- Phones and small tablets ---- */
+@media (max-width: 48rem) {
+  .dashboard {
+    padding: 1rem;
+  }
+
+  .list-card,
+  .editor-card {
+    padding: 1rem;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Comfortable tap targets and no iOS zoom-on-focus (needs 16px text). */
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+    min-height: 2.75rem;
+  }
+
+  .list-toolbar input[type="search"] {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions .button {
+    flex: 1 1 auto;
+  }
+
+  .form-card .form-actions .button {
+    flex: 1 1 0;
+  }
+
+  /* The table turns into one card per member. */
+  .members-table,
+  .members-table tbody,
+  .members-table tr,
+  .members-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .members-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .members-table tr {
+    margin-bottom: .75rem;
+    padding: .5rem .9rem;
+    background: #fff;
+    border: 1px solid #dce6dd;
+    border-radius: .75rem;
+  }
+
+  .members-table td,
+  .members-table tbody tr:last-child td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .4rem 0;
+    border-bottom: 1px solid #eef3ef;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .members-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: #526259;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .members-table td.row-actions {
+    justify-content: flex-start;
+    gap: 1.25rem;
+    padding: .65rem 0 .35rem;
+    border-bottom: 0;
+  }
+
+  .members-table td.row-actions::before {
+    content: none;
+  }
+
+  .members-table .text-button {
+    min-height: 2.5rem;
+  }
+
+  .row-deleted {
+    background: #faf8f6;
+  }
+
+  .pager-page {
+    display: none;
+  }
+}
