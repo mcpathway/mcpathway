@@ -63,7 +63,7 @@ export async function listMembersPage({
 
 // Builds a PostgREST "or" filter. Characters that have a special meaning in a
 // filter or in a LIKE pattern are removed so the search text can't break it.
-function buildSearchFilter(search) {
+export function buildSearchFilter(search) {
   const term = String(search ?? "")
     .replace(/[%_*,()"\\]/g, " ")
     .replace(/\s+/g, " ")
