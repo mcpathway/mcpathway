@@ -625,3 +625,556 @@ select:focus {
     display: none;
   }
 }
+
+/* ============ Hours pages (member picker, year view, month form) ============ */
+
+.muted,
+.muted-cell {
+  color: #68776d;
+}
+
+/* ---- Member picker ---- */
+.picker-card {
+  max-width: 36rem;
+}
+
+.picker-options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #dce6dd;
+  border-radius: .5rem;
+  overflow: hidden;
+}
+
+.picker-option {
+  display: grid;
+  gap: .15rem;
+  padding: .8rem .9rem;
+  border-bottom: 1px solid #eef3ef;
+  cursor: pointer;
+}
+
+.picker-option:last-child {
+  border-bottom: 0;
+}
+
+.picker-option:hover,
+.picker-option.is-active {
+  background: #eaf5ee;
+}
+
+.picker-name {
+  font-weight: 700;
+}
+
+.picker-meta {
+  color: #526259;
+  font-size: .9rem;
+}
+
+.picker-status {
+  min-height: 1.25rem;
+  margin: .75rem 0 0;
+  color: #526259;
+}
+
+/* ---- Selected member card ---- */
+.member-card {
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid #dce6dd;
+  border-radius: .75rem;
+}
+
+.member-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .25rem .75rem;
+}
+
+.member-card-main h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.member-card-code {
+  color: #12603a;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-content .member-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem 1rem;
+  margin: .5rem 0 0;
+  color: #526259;
+}
+
+/* ---- Year stepper ---- */
+.year-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.year-stepper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.year-stepper .button {
+  width: auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.year-stepper-year {
+  min-width: 4rem;
+  font-size: 1.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Totals ---- */
+.totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem;
+  margin: 0 0 1rem;
+}
+
+.total-tile {
+  padding: .85rem 1rem;
+  background: #fff;
+  border: 1px solid #dce6dd;
+  border-radius: .75rem;
+}
+
+.total-tile dt {
+  color: #526259;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.total-tile dd {
+  margin: .25rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* ---- Twelve-month table ---- */
+.hours-table tbody th {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+}
+
+.hours-table tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.hours-table td.row-actions {
+  display: table-cell;
+  text-align: right;
+}
+
+.hours-table .row-actions .text-button + .text-button {
+  margin-left: .85rem;
+}
+
+.hours-table .row-current th,
+.hours-table .row-current td {
+  background: #f3faf5;
+}
+
+.hours-table .row-future th,
+.hours-table .row-future td {
+  color: #8a948d;
+}
+
+.checkbox-field + .deleted-hours,
+.deleted-hours {
+  margin-top: 1rem;
+}
+
+.deleted-hours h3 {
+  margin: 0 0 .75rem;
+}
+
+.deleted-hours p {
+  margin: 0;
+}
+
+.deleted-list {
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deleted-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .5rem 0;
+  border-bottom: 1px solid #eef3ef;
+  color: #5a5552;
+}
+
+.deleted-list li:last-child {
+  border-bottom: 0;
+}
+
+/* ---- Month form ---- */
+.hours-form-card {
+  max-width: 34rem;
+}
+
+.duration-field {
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.duration-field legend {
+  margin-bottom: .45rem;
+  padding: 0;
+  font-weight: 600;
+}
+
+.duration-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.duration-inputs label {
+  display: grid;
+  gap: .3rem;
+}
+
+.duration-unit {
+  color: #526259;
+  font-size: .85rem;
+}
+
+.duration-total {
+  min-height: 1.25rem;
+  margin: .4rem 0 0;
+  color: #12603a;
+  font-weight: 600;
+}
+
+.hours-form-card .field-hint {
+  display: block;
+  margin: 0 0 1rem;
+}
+
+/* ---- Phones and small tablets ---- */
+@media (max-width: 48rem) {
+  .totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .member-card {
+    padding: 1rem;
+  }
+
+  .year-bar {
+    justify-content: space-between;
+  }
+
+  .year-stepper {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .picker-option {
+    padding: 1rem;
+  }
+
+  .duration-inputs input,
+  .hours-form-card input {
+    font-size: 1rem;
+    min-height: 2.75rem;
+  }
+
+  .hours-form-card .form-actions .button {
+    flex: 1 1 0;
+  }
+
+  /* The table turns into one card per month. */
+  .hours-table,
+  .hours-table tbody,
+  .hours-table tr,
+  .hours-table th,
+  .hours-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .hours-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .hours-table tr {
+    margin-bottom: .65rem;
+    padding: .4rem .9rem;
+    background: #fff;
+    border: 1px solid #dce6dd;
+    border-radius: .75rem;
+  }
+
+  .hours-table .row-current {
+    background: #f3faf5;
+  }
+
+  .hours-table tbody th,
+  .hours-table tbody tr:last-child th {
+    padding: .4rem 0;
+    border-bottom: 1px solid #eef3ef;
+    font-size: 1.05rem;
+  }
+
+  .hours-table td,
+  .hours-table tbody tr:last-child td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .4rem 0;
+    border-bottom: 1px solid #eef3ef;
+    text-align: right;
+  }
+
+  .hours-table td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: #526259;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .hours-table .row-current th,
+  .hours-table .row-current td,
+  .hours-table .row-future th,
+  .hours-table .row-future td {
+    background: transparent;
+  }
+
+  .hours-table td.muted-cell {
+    justify-content: flex-start;
+  }
+
+  .hours-table td.row-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 1.25rem;
+    padding: .55rem 0 .3rem;
+    border-bottom: 0;
+    text-align: left;
+  }
+
+  .hours-table td.row-actions:empty {
+    display: none;
+  }
+
+  .hours-table .row-actions .text-button + .text-button {
+    margin-left: 0;
+  }
+
+  .hours-table .text-button {
+    min-height: 2.5rem;
+  }
+
+  .hours-table tbody tr:has(td.row-actions:empty) td:last-of-type {
+    border-bottom: 0;
+  }
+
+  .deleted-list li {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .25rem;
+  }
+}
+
+/* ============ Reports pages ============ */
+
+/* "Expired" tag, stronger than the grey "inactive" tag. */
+.status-expired {
+  color: #8f1f17;
+  background: #fde4e1;
+}
+
+/* ---- Filters ---- */
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 1rem;
+  margin-bottom: .5rem;
+}
+
+.report-filters .field {
+  flex: 0 1 15rem;
+  min-width: 10rem;
+}
+
+.report-filters .checkbox-field {
+  flex: 1 1 100%;
+  margin: 0 0 1rem;
+}
+
+/* The hidden attribute must win over the display rules above. */
+.report-filters [hidden] {
+  display: none !important;
+}
+
+/* ---- Toolbar ---- */
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-bottom: .25rem;
+}
+
+.report-card .message {
+  min-height: 0;
+  margin: .5rem 0 0;
+}
+
+.report-card .message:empty {
+  display: none;
+}
+
+.message[data-kind="error"] {
+  color: #9b251b;
+}
+
+#report-results {
+  margin-top: 1rem;
+}
+
+#report-results[aria-busy="true"] {
+  opacity: .55;
+  transition: opacity .15s;
+}
+
+.report-title {
+  margin: 0 0 .75rem;
+}
+
+.report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: .75rem;
+  margin: 0 0 1rem;
+}
+
+.report-note {
+  margin: 0 0 1rem;
+  color: #526259;
+}
+
+/* ---- Results table ---- */
+.report-table td,
+.report-table th {
+  white-space: nowrap;
+}
+
+.report-table td[data-label="Email"],
+.report-table td[data-label="Name"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Phones and small tablets ---- */
+@media (max-width: 48rem) {
+  .report-filters .field {
+    flex: 1 1 100%;
+  }
+
+  .report-toolbar .button {
+    flex: 1 1 auto;
+  }
+
+  .report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The table turns into one card per member. */
+  .report-table,
+  .report-table tbody,
+  .report-table tr,
+  .report-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .report-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .report-table tr {
+    margin-bottom: .75rem;
+    padding: .4rem .9rem;
+    background: #fff;
+    border: 1px solid #dce6dd;
+    border-radius: .75rem;
+  }
+
+  .report-table td,
+  .report-table tbody tr:last-child td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .4rem 0;
+    border-bottom: 1px solid #eef3ef;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .report-table tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .report-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: #526259;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+}
