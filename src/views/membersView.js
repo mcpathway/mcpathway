@@ -16,6 +16,7 @@ export function renderMembers(
     onStateChange, // remembers page/search so Back from the form returns here
     onAdd,
     onEdit, // (member) => void
+    onHours, // (member) => void - opens that member's hours
     onDelete, // (id) => Promise<void>
     onRestore, // (id) => Promise<void>
     onExport, // (format: "csv" | "xlsx") => Promise<void>
@@ -169,6 +170,12 @@ export function renderMembers(
       return;
     }
 
+    if (button.dataset.hoursMember) {
+      const member = members.find((m) => m.id === button.dataset.hoursMember);
+      if (member) onHours(member);
+      return;
+    }
+
     if (button.dataset.deleteMember) {
       const member = members.find((m) => m.id === button.dataset.deleteMember);
       if (!member) return;
@@ -241,20 +248,20 @@ function memberRow(member, isAdmin) {
   const expiry = expiryState(member.membership_expiry_date);
   const id = escapeHtml(member.id);
 
+  const actions = deleted
+    ? `<button class="text-button" data-restore-member="${id}" type="button">Restore</button>`
+    : `<button class="text-button" data-edit-member="${id}" type="button">Edit</button><button class="text-button" data-hours-member="${id}" type="button">Hours</button>${
+      isAdmin
+        ? `<button class="text-button text-button-danger" data-delete-member="${id}" type="button">Delete</button>`
+        : ""
+    }`;
 
   const membership_expiry_date = new Date(member.membership_expiry_date);
   const formatted_membership_expiry_date = membership_expiry_date.toLocaleDateString('en-US', {
-                            month: 'long', // "October" (use 'short' for "Oct")
-                            year: 'numeric' // "2026"
-                          });
+                                            month: 'short', // "October" (use 'short' for "Oct")
+                                            year: 'numeric' // "2026"
+                                          });
 
-  const actions = deleted
-    ? `<button class="button button-secondary button-small" data-restore-member="${id}" type="button">Restore</button>`
-    : `<button class="button button-secondary button-small" data-edit-member="${id}" type="button">Edit</button>${
-      isAdmin
-        ? `<button class="button button-secondary button-small text-button-danger" data-delete-member="${id}" type="button">Delete</button>`
-        : ""
-    }`;
 
   return `
     <tr${deleted ? ' class="row-deleted"' : ""}>
@@ -278,7 +285,7 @@ function memberRow(member, isAdmin) {
 }
 
 // Expired, or due for renewal within the next three months.
-function expiryState(dateString) {
+export function expiryState(dateString) {
   const [year, month, day] = String(dateString).split("-").map(Number);
   if (!year) return null;
 
@@ -449,7 +456,7 @@ function levelOptions(levels, selectedId) {
 function topbar(profile) {
   return `
       <header class="topbar">
-        <h1>Pathway Logbook Management System</h1>
+        <h1>Pathway Clinical Hours Management System</h1>
         <div class="account">
           <span>Signed in as <strong>${escapeHtml(profile.username)}</strong> (${escapeHtml(profile.role)})</span>
           <button class="button button-secondary" id="sign-out" type="button">Sign out</button>
