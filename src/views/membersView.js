@@ -249,10 +249,10 @@ function memberRow(member, isAdmin) {
   const id = escapeHtml(member.id);
 
   const actions = deleted
-    ? `<button class="text-button" data-restore-member="${id}" type="button">Restore</button>`
-    : `<button class="text-button" data-edit-member="${id}" type="button">Edit</button><button class="text-button" data-hours-member="${id}" type="button">Hours</button>${
+    ? `<button class="button button-secondary button-small" data-restore-member="${id}" type="button">Restore</button>`
+    : `<button class="button button-secondary button-small" data-edit-member="${id}" type="button">Edit</button><button class="button button-secondary button-small" data-hours-member="${id}" type="button">Hours</button>${
       isAdmin
-        ? `<button class="text-button text-button-danger" data-delete-member="${id}" type="button">Delete</button>`
+        ? `<button class="button button-secondary button-small text-button-danger" data-delete-member="${id}" type="button">Delete</button>`
         : ""
     }`;
 
