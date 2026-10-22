@@ -323,16 +323,16 @@ function monthRow(month, year, current, record, isAdmin) {
       <td data-label="Clinical">${formatDuration(record.clinical_minutes)}</td>
       <td data-label="Supervision">${formatDuration(record.supervision_minutes)}</td>
       <td data-label="OPD points">${record.opd_points}</td>`;
-    actions = `<button class="text-button" data-edit-month="${month}" type="button">Edit</button>${
+    actions = `<button class="button button-secondary button-small" data-edit-month="${month}" type="button">Edit</button>${
       isAdmin
-        ? `<button class="text-button text-button-danger" data-delete-record="${escapeHtml(record.id)}" type="button">Delete</button>`
+        ? `<button class="button button-secondary button-small text-button-danger" data-delete-record="${escapeHtml(record.id)}" type="button">Delete</button>`
         : ""
     }`;
   } else if (future) {
     cells = '<td class="muted-cell" colspan="3">Upcoming</td>';
   } else {
     cells = '<td class="muted-cell" colspan="3">Not recorded</td>';
-    actions = `<button class="text-button" data-add-month="${month}" type="button">Add hours</button>`;
+    actions = `<button class="button button-secondary button-small" data-add-month="${month}" type="button">Add hours</button>`;
   }
 
   return `
@@ -362,7 +362,7 @@ function deletedSection(deletedRecords, year) {
             <span><strong>${MONTH_NAMES[month - 1]}</strong> · Clinical ${
         formatDuration(record.clinical_minutes)
       } · Supervision ${formatDuration(record.supervision_minutes)} · OPD ${record.opd_points}</span>
-            <button class="text-button" data-restore-record="${escapeHtml(record.id)}" type="button">Restore</button>
+            <button class="button button-secondary button-small" data-restore-record="${escapeHtml(record.id)}" type="button">Restore</button>
           </li>`;
     }).join("")
   }
