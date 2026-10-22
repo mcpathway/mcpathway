@@ -1178,3 +1178,108 @@ select:focus {
     text-transform: uppercase;
   }
 }
+
+/* ============ Membership levels page ============
+/* ---- Desktop: keep the actions cell a real table cell so row lines stay aligned ---- */
+.levels-table td.row-actions {
+  display: table-cell;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.levels-table .row-actions .button + .button {
+  margin-left: .5rem;
+}
+
+/* ---- Phones and small tablets ---- */
+@media (max-width: 48rem) {
+  .topbar h1 {
+    font-size: 1.15rem;
+  }
+
+  /* Form and list stack one above the other (the old breakpoint was narrower). */
+  .management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-state {
+    grid-column: auto;
+  }
+
+  .editor-card .form-actions .button {
+    flex: 1 1 0;
+  }
+
+  /* The table turns into one card per level. */
+  .levels-table,
+  .levels-table tbody,
+  .levels-table tr,
+  .levels-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .levels-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .levels-table tr {
+    margin-bottom: .75rem;
+    padding: .4rem .9rem;
+    background: #fff;
+    border: 1px solid #dce6dd;
+    border-radius: .75rem;
+  }
+
+  .levels-table td,
+  .levels-table tbody tr:last-child td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .4rem 0;
+    border-bottom: 1px solid #eef3ef;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .levels-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: #526259;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  /* Edit / Delete: two equal, easy-to-tap buttons along the bottom of the card. */
+  .levels-table td.row-actions,
+  .levels-table tbody tr:last-child td.row-actions {
+    display: flex;
+    gap: .75rem;
+    padding: .7rem 0 .35rem;
+    border-bottom: 0;
+  }
+
+  .levels-table td.row-actions::before {
+    content: none;
+  }
+
+  .levels-table td.row-actions .button {
+    flex: 1 1 0;
+    min-height: 2.75rem;
+    margin-left: 0;
+  }
+
+  /* The last line of every card has no divider under it. */
+  .levels-table tr td:last-child {
+    border-bottom: 0;
+  }
+}
