@@ -67,11 +67,11 @@ function levelForm() {
         </label>
         <label class="field" for="level-description">
           Description <span class="field-hint">(optional)</span>
-          <textarea id="level-description" name="description" rows="4" maxlength="500"></textarea>
+          <textarea id="level-description" name="description" rows="3" maxlength="500"></textarea>
         </label>
         <label class="field" for="level-sort-order">
           Display order
-          <input id="level-sort-order" name="sortOrder" type="number" min="0" step="1" value="0" required />
+          <input id="level-sort-order" name="sortOrder" type="number" inputmode="numeric" min="0" step="1" value="0" required />
         </label>
         <label class="checkbox-field" for="level-is-active">
           <input id="level-is-active" name="isActive" type="checkbox" checked />
@@ -114,10 +114,10 @@ function levelsTable(levels, isAdmin) {
     .map(
       (level) => `
         <tr>
-          <td><strong>${escapeHtml(level.name)}</strong></td>
-          <td>${level.description ? escapeHtml(level.description) : "—"}</td>
-          <td>${level.sort_order}</td>
-          <td><span class="status ${
+          <td data-label="Level"><strong>${escapeHtml(level.name)}</strong></td>
+          <td data-label="Description">${level.description ? escapeHtml(level.description) : "—"}</td>
+          <td data-label="Order">${level.sort_order}</td>
+          <td data-label="Status"><span class="status ${
         level.is_active ? "status-active" : "status-inactive"
       }">${level.is_active ? "Active" : "Inactive"}</span></td>
           ${
@@ -140,7 +140,7 @@ function levelsTable(levels, isAdmin) {
   return `
     <section class="list-card">
       <div class="table-scroll">
-        <table>
+        <table class="levels-table">
           <thead>
             <tr>
               <th scope="col">Level</th>
@@ -225,7 +225,10 @@ function attachAdminActions(
       submitButton.textContent = "Save changes";
       cancelButton.hidden = false;
       message.textContent = "";
-      form.elements.name.focus();
+
+      // On a phone the form sits above the list, so bring it into view first.
+      title.scrollIntoView({ behavior: "smooth", block: "start" });
+      form.elements.name.focus({ preventScroll: true });
     });
   });
 
