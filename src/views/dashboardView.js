@@ -45,11 +45,6 @@ export function renderDashboard(
             isAdmin ? "Manage levels" : "View levels"
           }</button>
           </article>
-          <article class="module-card"><h3>Record deletion</h3><p>${
-    isAdmin
-      ? "You can delete and restore members from the Members page."
-      : "Only the admin account can delete records."
-  }</p></article>
         </div>
       </main>
     </section>
