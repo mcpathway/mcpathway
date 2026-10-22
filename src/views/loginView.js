@@ -4,7 +4,7 @@ export function renderLogin(container, { onSubmit }) {
   container.innerHTML = `
     <section class="login-page">
       <form class="login-card" id="login-form">
-        <h1 class="brand">Pathway Logbook Management System</h1>
+        <h1 class="brand">Pathway Admin</h1>
         <p class="lead">Sign in to manage membership and working hours.</p>
         <label class="field" for="username">
           Username
