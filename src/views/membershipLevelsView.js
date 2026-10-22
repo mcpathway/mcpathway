@@ -16,7 +16,7 @@ export function renderMembershipLevels(
   container.innerHTML = `
     <section class="dashboard">
       <header class="topbar">
-        <h1>Pathway Clinical Hours Management System</h1>
+        <h1>Pathway Admin</h1>
         <div class="account">
           <span>Signed in as <strong>${
     escapeHtml(profile.username)
