@@ -328,7 +328,7 @@ function showLoggedOut() {
 }
 
 async function start() {
-  app.innerHTML = '<p class="loading">Opening Pathway Clinical Hours Management System…</p>';
+  app.innerHTML = '<p class="loading">Opening Pathway Admin…</p>';
   try {
     const user = await getCurrentUser();
     if (user) await showDashboard(user);
