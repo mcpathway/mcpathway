@@ -431,7 +431,7 @@ async function copyResult(resultPromise) {
 function topbar(profile) {
   return `
       <header class="topbar">
-        <h1>Pathway Clinical Hours Management System</h1>
+        <h1>Pathway Admin</h1>
         <div class="account">
           <span>Signed in as <strong>${escapeHtml(profile.username)}</strong> (${escapeHtml(profile.role)})</span>
           <button class="button button-secondary" id="sign-out" type="button">Sign out</button>
