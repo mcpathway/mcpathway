@@ -56,6 +56,7 @@ export function renderReport(
     report,
     backLabel,
     pageSize,
+    initialFilters = {}, // optional starting values, e.g. from a dashboard link
     onBack,
     onExport, // (format: "csv" | "xlsx", { name, headers, rows }) => Promise<void>
     onSignOut,
@@ -103,6 +104,9 @@ export function renderReport(
   for (const filter of report.filters) {
     filters[filter.name] = typeof filter.default === "function" ? filter.default() : filter.default;
   }
+  for (const [name, value] of Object.entries(initialFilters)) {
+    if (name in filters) filters[name] = value;
+  }
 
   let rows = []; // the rows of the CURRENT page only
   let total = 0; // matching rows across all pages
@@ -135,6 +139,12 @@ export function renderReport(
       const wrapper = filtersEl.querySelector(`[data-filter="${filter.name}"]`);
       if (wrapper) wrapper.hidden = !filter.showWhen(filters);
     }
+
+    // Some buttons only make sense for certain filter choices.
+    for (const button of actionButtons) {
+      const action = report.actions.find((item) => item.id === button.dataset.action);
+      if (action?.showWhen) button.hidden = !action.showWhen(filters);
+    }
   }
 
   function drawResults() {
@@ -158,7 +168,13 @@ export function renderReport(
       html += `
         <div class="empty-results">
           <h3>Nothing to show</h3>
-          <p>${escapeHtml(report.emptyMessage ?? "No members match these filters.")}</p>
+          <p>${
+        escapeHtml(
+          (typeof report.emptyMessage === "function"
+            ? report.emptyMessage(filters)
+            : report.emptyMessage) ?? "No members match these filters.",
+        )
+      }</p>
         </div>`;
     } else {
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -233,7 +249,14 @@ export function renderReport(
     const filter = report.filters.find((item) => item.name === control.name);
     if (!filter) return;
 
-    filters[filter.name] = control.type === "checkbox" ? control.checked : control.value;
+    if (filter.type === "checkboxes") {
+      // A group of ticks: the value is the list of ticked boxes.
+      filters[filter.name] = [
+        ...filtersEl.querySelectorAll(`input[name="${filter.name}"]:checked`),
+      ].map((input) => input.value);
+    } else {
+      filters[filter.name] = control.type === "checkbox" ? control.checked : control.value;
+    }
     applyVisibility();
     setMessage("");
 
@@ -348,6 +371,23 @@ function filterControl(filter, options, value) {
         <input type="checkbox" name="${name}"${value ? " checked" : ""} />
         ${escapeHtml(filter.label)}
       </label>`;
+  }
+
+  if (filter.type === "checkboxes") {
+    const chosen = value ?? [];
+    return `
+      <fieldset class="filter-group" data-filter="${name}">
+        <legend>${escapeHtml(filter.label)}</legend>
+        <div class="filter-group-items">
+          ${
+      filter.options.map(([optionValue, label]) => `
+          <label class="checkbox-field">
+            <input type="checkbox" name="${name}" value="${escapeHtml(optionValue)}"${chosen.includes(optionValue) ? " checked" : ""} />
+            ${escapeHtml(label)}
+          </label>`).join("")
+    }
+        </div>
+      </fieldset>`;
   }
 
   if (filter.type === "search") {
