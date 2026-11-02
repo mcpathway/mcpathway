@@ -139,9 +139,11 @@ export async function getMemberHoursTotals(options) {
 
 /* ---------------------- 3. Member emails ---------------------- */
 
-const EMAIL_COLUMNS = "id, code_number, name, email, status, membership_levels ( name )";
+const EMAIL_COLUMNS =
+  "id, code_number, name, email, phone, status, membership_levels ( name )";
 
-// `options` = { status, levelId, search }
+// `options` = { status, levelId, search, emailFilter }
+// emailFilter: "with" (default), "without" or "all".
 function narrowMembers(query, { status, levelId, search }) {
   let q = query.is("deleted_at", null);
   if (status && status !== "all") q = q.eq("status", status);
@@ -152,45 +154,140 @@ function narrowMembers(query, { status, levelId, search }) {
   return q;
 }
 
-// One page of members that have an email, plus how many in the same
-// selection have none. Returns { rows, total, page, withoutEmail }.
+function narrowByEmail(query, emailFilter) {
+  if (emailFilter === "without") return query.is("email", null);
+  if (emailFilter === "all") return query;
+  return query.not("email", "is", null);
+}
+
+// How many members in the selection have / don't have an email address.
+async function countEmailSplit(options) {
+  const count = async (narrow) => {
+    const { count: total, error } = await narrow(
+      narrowMembers(
+        requireSupabase().from("members").select("id", { count: "exact", head: true }),
+        options,
+      ),
+    );
+    if (error) throw error;
+    return total ?? 0;
+  };
+
+  const [withEmail, withoutEmail] = await Promise.all([
+    count((query) => query.not("email", "is", null)),
+    count((query) => query.is("email", null)),
+  ]);
+
+  return { withEmail, withoutEmail };
+}
+
+// One page of members, plus the with/without counts for the whole selection.
+// Returns { rows, total, page, withEmail, withoutEmail }.
 export async function listMemberEmailsPage(options, page, pageSize) {
-  const [result, withoutEmail] = await Promise.all([
+  const [result, split] = await Promise.all([
     fetchPage(
       () =>
         narrowMembers(
-          requireSupabase()
-            .from("members")
-            .select(EMAIL_COLUMNS, { count: "exact" })
-            .not("email", "is", null),
+          narrowByEmail(
+            requireSupabase().from("members").select(EMAIL_COLUMNS, { count: "exact" }),
+            options.emailFilter,
+          ),
+          options,
+        ).order("code_number", { ascending: true }),
+      page,
+      pageSize,
+    ),
+    countEmailSplit(options),
+  ]);
+
+  return { ...result, ...split };
+}
+
+export function listAllMemberEmails(options) {
+  return fetchAll(() =>
+    narrowMembers(
+      narrowByEmail(
+        requireSupabase().from("members").select(EMAIL_COLUMNS),
+        options.emailFilter,
+      ),
+      options,
+    ).order("code_number", { ascending: true })
+  );
+}
+
+/* ------------- 4. Incomplete member records ------------- */
+
+// The optional member details a report can check: [column, label].
+export const MEMBER_DETAIL_FIELDS = [
+  ["email", "Email"],
+  ["phone", "Phone"],
+  ["address", "Address"],
+  ["organisation", "Organisation"],
+  ["position", "Position"],
+  ["specialisation", "Specialisation"],
+  ["education_background", "Education background"],
+];
+
+const INCOMPLETE_COLUMNS = `
+  id, code_number, name, status, email, phone, address, organisation,
+  position, specialisation, education_background,
+  membership_levels ( name )
+`;
+
+// `options` = { status, levelId, search, fields }
+// A member matches when ANY of the chosen `fields` is empty. With no `fields`
+// the condition is skipped (used to count everyone in the selection).
+function narrowIncomplete(query, { status, levelId, search, fields }) {
+  let q = query.is("deleted_at", null);
+  if (status && status !== "all") q = q.eq("status", status);
+  if (levelId) q = q.eq("membership_level_id", levelId);
+
+  // Only known column names are ever put into the filter.
+  const allowed = new Set(MEMBER_DETAIL_FIELDS.map(([column]) => column));
+  const missing = (fields ?? [])
+    .filter((column) => allowed.has(column))
+    .map((column) => `${column}.is.null`)
+    .join(",");
+  const searchFilter = buildSearchFilter(search);
+
+  // The member search and the "missing" condition must BOTH hold, so they are
+  // combined into one filter.
+  if (searchFilter && missing) return q.or(`and(or(${searchFilter}),or(${missing}))`);
+  if (searchFilter) return q.or(searchFilter);
+  if (missing) return q.or(missing);
+  return q;
+}
+
+// Returns { rows, total, page, selectionTotal } where selectionTotal is how
+// many members match the other filters, complete or not.
+export async function listIncompleteMembersPage(options, page, pageSize) {
+  const [result, selectionTotal] = await Promise.all([
+    fetchPage(
+      () =>
+        narrowIncomplete(
+          requireSupabase().from("members").select(INCOMPLETE_COLUMNS, { count: "exact" }),
           options,
         ).order("code_number", { ascending: true }),
       page,
       pageSize,
     ),
     (async () => {
-      const { count, error } = await narrowMembers(
-        requireSupabase()
-          .from("members")
-          .select("id", { count: "exact", head: true })
-          .is("email", null),
-        options,
+      const { count, error } = await narrowIncomplete(
+        requireSupabase().from("members").select("id", { count: "exact", head: true }),
+        { ...options, fields: [] },
       );
       if (error) throw error;
       return count ?? 0;
     })(),
   ]);
 
-  return { ...result, withoutEmail };
+  return { ...result, selectionTotal };
 }
 
-export function listAllMemberEmails(options) {
+export function listAllIncompleteMembers(options) {
   return fetchAll(() =>
-    narrowMembers(
-      requireSupabase()
-        .from("members")
-        .select(EMAIL_COLUMNS)
-        .not("email", "is", null),
+    narrowIncomplete(
+      requireSupabase().from("members").select(INCOMPLETE_COLUMNS),
       options,
     ).order("code_number", { ascending: true })
   );
