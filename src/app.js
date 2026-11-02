@@ -28,6 +28,7 @@ import {
   exportMembersCsv,
   exportMembersXlsx,
 } from "./data/memberExport.js";
+import { getDashboardSummary } from "./data/dashboardRepository.js";
 import { renderDashboard } from "./views/dashboardView.js";
 import {
   renderHoursForm,
@@ -59,6 +60,8 @@ async function showDashboard(user) {
     onManageHours: () => showHoursPicker(user),
     onOpenReports: () => showReportsHome(user),
     onManageLevels: () => showMembershipLevels(user),
+    loadSummary: getDashboardSummary,
+    onOpenReport: (id, filters) => showReport(user, id, { filters, fromDashboard: true }),
     onSignOut: signOutAndShowLogin,
   });
 }
@@ -246,7 +249,7 @@ function showReportsHome(user) {
   });
 }
 
-function showReport(user, id) {
+function showReport(user, id, { filters = {}, fromDashboard = false } = {}) {
   const report = findReport(id);
   if (!report) {
     showReportsHome(user);
@@ -256,9 +259,10 @@ function showReport(user, id) {
   renderReport(app, {
     profile: user.profile,
     report,
-    backLabel: "Reports",
+    backLabel: fromDashboard ? "Dashboard" : "Reports",
     pageSize: REPORT_PAGE_SIZE,
-    onBack: () => showReportsHome(user),
+    initialFilters: filters,
+    onBack: () => (fromDashboard ? showDashboard(user) : showReportsHome(user)),
     onExport: async (format, table) => {
       if (format === "csv") exportTableCsv(table);
       else await exportTableXlsx(table);
