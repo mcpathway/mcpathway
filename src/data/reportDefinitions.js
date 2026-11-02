@@ -9,6 +9,9 @@ import {
 } from "./hoursRepository.js";
 import {
   countMembersExpiring,
+  listAllIncompleteMembers,
+  listIncompleteMembersPage,
+  MEMBER_DETAIL_FIELDS,
   getMemberHoursTotals,
   listAllMemberEmails,
   listAllMemberHours,
@@ -93,6 +96,17 @@ function timeLeft(days) {
 
 function expiringOptions(filters) {
   const today = todayParts();
+
+  // "0" = only memberships that have already expired (before today).
+  if (filters.months === "0") {
+    return {
+      startDate: null,
+      endDate: dateString(addDays(today, -1)),
+      status: filters.status,
+      search: filters.search,
+    };
+  }
+
   return {
     startDate: filters.includeExpired ? null : dateString(today),
     endDate: dateString(addMonths(today, Number(filters.months))),
@@ -122,6 +136,7 @@ const expiringReport = {
       type: "select",
       default: "6",
       options: [
+        ["0", "Already expired only"],
         ["1", "1 month"],
         ["2", "2 months"],
         ["3", "3 months"],
@@ -187,7 +202,9 @@ const expiringReport = {
     { label: "Phone", value: (r) => r.phone ?? "" },
   ],
   exportName: (filters) =>
-    `members-expiring-${filters.months}-months-${dateString(todayParts())}`,
+    filters.months === "0"
+      ? `members-expired-${dateString(todayParts())}`
+      : `members-expiring-${filters.months}-months-${dateString(todayParts())}`,
   emptyMessage: "No memberships match these filters.",
 };
 
@@ -334,6 +351,7 @@ function emailOptions(filters) {
     status: filters.status,
     levelId: filters.levelId === "all" ? null : filters.levelId,
     search: filters.search,
+    emailFilter: filters.emailFilter,
   };
 }
 
@@ -341,9 +359,20 @@ const emailsReport = {
   id: "emails",
   title: "Member email addresses",
   description:
-    "A list of member emails you can copy straight into your email program, or download.",
+    "Copy or download member email addresses, and see which members have no email on file.",
   filters: [
     MEMBER_FILTER,
+    {
+      name: "emailFilter",
+      label: "Show",
+      type: "select",
+      default: "with",
+      options: [
+        ["with", "Members with an email"],
+        ["without", "Members without an email"],
+        ["all", "All members"],
+      ],
+    },
     {
       name: "status",
       label: "Status",
@@ -373,6 +402,7 @@ const emailsReport = {
       type: "select",
       default: "comma",
       local: true,
+      showWhen: (filters) => filters.emailFilter !== "without",
       options: [
         ["comma", "Comma (Gmail, most apps)"],
         ["semicolon", "Semicolon (Outlook)"],
@@ -386,11 +416,15 @@ const emailsReport = {
       rows: result.rows,
       total: result.total,
       page: result.page,
-      summary: [{ label: "Members with an email", value: result.total }],
-      notes: result.withoutEmail
+      summary: [
+        { label: "Members listed", value: result.total },
+        { label: "With an email", value: result.withEmail },
+        { label: "Without an email", value: result.withoutEmail },
+      ],
+      notes: filters.emailFilter === "with" && result.withoutEmail
         ? [`${result.withoutEmail} ${plural(result.withoutEmail, "member")} in this selection ${
           plural(result.withoutEmail, "has", "have")
-        } no email address on file.`]
+        } no email address. Choose “Members without an email” in the Show box to see who.`]
         : [],
     };
   },
@@ -398,7 +432,13 @@ const emailsReport = {
   columns: [
     { label: "Code", value: (r) => formatMemberCode(r.code_number) },
     { label: "Name", value: (r) => r.name },
-    { label: "Email", value: (r) => r.email },
+    { label: "Email", value: (r) => r.email ?? "" },
+    {
+      // Handy for contacting members who have no email on file.
+      label: "Phone",
+      show: (filters) => filters.emailFilter !== "with",
+      value: (r) => r.phone ?? "",
+    },
     { label: "Level", value: (r) => r.membership_levels?.name ?? "" },
     { label: "Status", value: (r) => statusText(r.status), tag: (r) => statusTag(r.status) },
   ],
@@ -406,10 +446,14 @@ const emailsReport = {
     {
       id: "copy-emails",
       label: "Copy email addresses",
+      showWhen: (filters) => filters.emailFilter !== "without",
       // Receives EVERY matching row (not just the page on screen).
       run(rows, filters) {
         const list = uniqueEmails(rows);
-        const duplicates = rows.length - list.length;
+        if (!list.length) throw new Error("There are no email addresses in this list to copy.");
+
+        const withAddress = rows.filter((row) => String(row.email ?? "").trim()).length;
+        const duplicates = withAddress - list.length;
         const separator = filters.separator === "semicolon" ? "; " : ", ";
 
         return {
@@ -421,8 +465,20 @@ const emailsReport = {
       },
     },
   ],
-  exportName: () => `member-emails-${dateString(todayParts())}`,
-  emptyMessage: "No members with an email address match these filters.",
+  resultsTitle: (filters) =>
+    ({
+      with: "Members with an email address",
+      without: "Members without an email address",
+      all: "All members",
+    })[filters.emailFilter],
+  exportName: (filters) =>
+    filters.emailFilter === "without"
+      ? `members-without-email-${dateString(todayParts())}`
+      : `member-emails-${dateString(todayParts())}`,
+  emptyMessage: (filters) =>
+    filters.emailFilter === "without"
+      ? "Every member in this selection has an email address."
+      : "No members match these filters.",
 };
 
 function uniqueEmails(rows) {
@@ -439,9 +495,100 @@ function uniqueEmails(rows) {
   return list;
 }
 
+/* ------------------ 4. Incomplete member records ------------------ */
+
+function incompleteOptions(filters) {
+  return {
+    status: filters.status,
+    levelId: filters.levelId === "all" ? null : filters.levelId,
+    search: filters.search,
+    fields: filters.fields,
+  };
+}
+
+// Every optional detail that is empty for this member (not only the ticked ones).
+const missingDetails = (member) =>
+  MEMBER_DETAIL_FIELDS
+    .filter(([column]) => !String(member[column] ?? "").trim())
+    .map(([, label]) => label);
+
+const incompleteReport = {
+  id: "incomplete",
+  title: "Incomplete member records",
+  description:
+    "Find members with missing details such as email, phone, address or organisation. Tick the details to check: a member is listed if any ticked detail is empty.",
+  filters: [
+    MEMBER_FILTER,
+    {
+      name: "fields",
+      label: "Details to check",
+      type: "checkboxes",
+      default: () => MEMBER_DETAIL_FIELDS.map(([column]) => column),
+      options: MEMBER_DETAIL_FIELDS,
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      default: "all",
+      options: STATUS_OPTIONS,
+    },
+    {
+      name: "levelId",
+      label: "Membership level",
+      type: "select",
+      default: "all",
+      options: async () => {
+        const levels = await listMembershipLevels();
+        return [
+          ["all", "All levels"],
+          ...levels.map((level) => [
+            level.id,
+            level.is_active ? level.name : `${level.name} (inactive)`,
+          ]),
+        ];
+      },
+    },
+  ],
+  async loadPage(filters, { page, pageSize }) {
+    if (!filters.fields.length) {
+      return {
+        rows: [],
+        total: 0,
+        page: 1,
+        summary: [],
+        notes: ["Tick at least one detail to check."],
+      };
+    }
+
+    const result = await listIncompleteMembersPage(incompleteOptions(filters), page, pageSize);
+
+    return {
+      rows: result.rows,
+      total: result.total,
+      page: result.page,
+      summary: [
+        { label: "Members with missing details", value: result.total },
+        { label: "Complete records", value: result.selectionTotal - result.total },
+      ],
+    };
+  },
+  loadAll: (filters) =>
+    filters.fields.length ? listAllIncompleteMembers(incompleteOptions(filters)) : [],
+  columns: [
+    { label: "Code", value: (r) => formatMemberCode(r.code_number) },
+    { label: "Name", value: (r) => r.name },
+    { label: "Level", value: (r) => r.membership_levels?.name ?? "" },
+    { label: "Status", value: (r) => statusText(r.status), tag: (r) => statusTag(r.status) },
+    { label: "Missing", value: (r) => missingDetails(r).join(", "), tag: () => "status-warning" },
+  ],
+  exportName: () => `incomplete-member-records-${dateString(todayParts())}`,
+  emptyMessage: "No members are missing the ticked details.",
+};
+
 /* ------------------------------------------------------------------ */
 
-export const REPORTS = [expiringReport, hoursReport, emailsReport];
+export const REPORTS = [expiringReport, hoursReport, emailsReport, incompleteReport];
 
 export function findReport(id) {
   return REPORTS.find((report) => report.id === id);
