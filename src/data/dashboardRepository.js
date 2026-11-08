@@ -16,6 +16,7 @@ export async function getDashboardSummary() {
     expiringWithin3: n(data.expiring_3),
     expiringWithin6: n(data.expiring_6),
     missingDetails: n(data.missing_details),
+    cardsDue: n(data.cards_due),
     levels: (data.levels ?? []).map((level) => ({
       id: level.id,
       name: level.name,
