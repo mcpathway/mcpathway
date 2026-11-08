@@ -4,9 +4,13 @@ export function renderDashboard(
     profile,
     onManageMembers,
     onManageHours,
+    onManageCards,
+    onOpenOpd,
     onOpenReports,
     onManageLevels,
     loadSummary, // async () => summary (see data/dashboardRepository.js)
+    initialSummary, // the last summary seen (shown at once, then quietly refreshed), or null
+    onSummaryLoaded, // (summary) => void - lets the caller remember it
     onOpenReport, // (reportId, presetFilters) => void
     onSignOut,
   },
@@ -28,7 +32,7 @@ export function renderDashboard(
         <h2>Welcome back</h2>
         <p>Set up membership levels before creating member records.</p>
         <section class="summary" id="summary" aria-live="polite" aria-label="Membership summary">
-          <p class="summary-status">Loading summary…</p>
+          <span class="visually-hidden">Loading summary…</span>
         </section>
         <div class="module-grid">
           <article class="module-card module-card-action">
@@ -40,6 +44,11 @@ export function renderDashboard(
             <h3>Hours</h3>
             <p>Record clinical, supervision, and OPD hours.</p>
             <button class="button button-secondary button-small" id="manage-hours" type="button">Manage hours</button>
+          </article>
+          <article class="module-card module-card-action">
+            <h3>Cards</h3>
+            <p>Record physical cards posted or collected.</p>
+            <button class="button button-secondary button-small" id="manage-cards" type="button">Manage cards</button>
           </article>
           <article class="module-card module-card-action">
             <h3>Reports</h3>
@@ -57,6 +66,16 @@ export function renderDashboard(
             isAdmin ? "Manage levels" : "View levels"
           }</button>
           </article>
+          <article class="module-card module-card-action">
+            <h3>OPD calculator</h3>
+            <p>Estimate the OPD points for trainings attended.</p>
+            <button class="button button-secondary button-small" id="open-opd" type="button">Open calculator</button>
+          </article>
+          <article class="module-card"><h3>Record deletion</h3><p>${
+    isAdmin
+      ? "You can delete and restore members from the Members page."
+      : "Only the admin account can delete records."
+  }</p></article>
         </div>
       </main>
     </section>
@@ -72,6 +91,12 @@ export function renderDashboard(
     .querySelector("#manage-hours")
     .addEventListener("click", onManageHours);
   container
+    .querySelector("#open-opd")
+    .addEventListener("click", onOpenOpd);
+  container
+    .querySelector("#manage-cards")
+    .addEventListener("click", onManageCards);
+  container
     .querySelector("#manage-levels")
     .addEventListener("click", onManageLevels);
   container.querySelector("#sign-out").addEventListener("click", onSignOut);
@@ -85,6 +110,7 @@ export function renderDashboard(
     expiring: () =>
       onOpenReport("expiring", { months: "6", status: "active", includeExpired: false }),
     missing: () => onOpenReport("incomplete", { status: "active" }),
+    cards: () => onOpenReport("cards", { cardState: "due", status: "active" }),
   };
 
   summaryEl.addEventListener("click", (event) => {
@@ -92,17 +118,63 @@ export function renderDashboard(
     if (tile) targets[tile.dataset.target]?.();
   });
 
+  // Coming back to the dashboard: show the last numbers straight away so the layout doesn't jump.
+  // First visit: grey placeholder tiles with the same layout, so the real numbers drop in without a jump.
+  let shownHtml = "";
+  if (initialSummary) {
+    shownHtml = summaryHtml(initialSummary);
+    summaryEl.innerHTML = shownHtml;
+  } else {
+    summaryEl.innerHTML = placeholderHtml();
+    summaryEl.setAttribute("aria-busy", "true");
+  }
+
   // A failed summary must never break the rest of the dashboard.
   loadSummary()
     .then((summary) => {
+      onSummaryLoaded?.(summary);
       if (!summaryEl.isConnected) return; // the person already left this screen
-      summaryEl.innerHTML = summaryHtml(summary);
+      summaryEl.removeAttribute("aria-busy");
+      const html = summaryHtml(summary);
+      if (html !== shownHtml) summaryEl.innerHTML = html; // only touched when a number changed
     })
     .catch(() => {
-      if (!summaryEl.isConnected) return;
+      if (!summaryEl.isConnected || initialSummary) return; // keep the numbers already on screen
       summaryEl.innerHTML =
         '<p class="summary-status" role="alert">The summary could not be loaded. Please check your connection or trun VPN on.</p>';
     });
+}
+
+// Same shape as the real summary: six tiles and the level card, with the numbers greyed out.
+function placeholderHtml() {
+  const labels = [
+    "Active members",
+    "New this month",
+    "Expired",
+    "Expiring in 6 months",
+    "Cards due",
+    "Missing details",
+  ];
+  const tiles = labels.map((label) => `
+    <div class="stat-tile is-loading">
+      <span class="stat-label">${label}</span>
+      <span class="stat-value" aria-hidden="true">&nbsp;</span>
+      <span class="stat-note" aria-hidden="true">&nbsp;</span>
+    </div>`).join("");
+
+  const rows = [0, 1, 2].map(() => `
+    <li class="level-row is-loading">
+      <span class="level-name" aria-hidden="true">&nbsp;</span>
+      <span class="level-bar" aria-hidden="true"></span>
+      <span class="level-count" aria-hidden="true">&nbsp;</span>
+    </li>`).join("");
+
+  return `
+    <div class="stat-grid">${tiles}</div>
+    <div class="level-card">
+      <h3>Active members by level</h3>
+      <ul class="level-list">${rows}</ul>
+    </div>`;
 }
 
 const formatNumber = (value) => Number(value).toLocaleString("en-US");
@@ -150,6 +222,13 @@ function summaryHtml(summary) {
         formatNumber(summary.expiringWithin3)
       } · 3–6 mo: ${formatNumber(summary.expiringWithin6)}`,
       tone: summary.expiringWithin1 ? "warning" : "",
+    }),
+    tile({
+      target: "cards",
+      label: "Cards due",
+      value: summary.cardsDue,
+      note: "Active members without a physical card",
+      tone: summary.cardsDue ? "warning" : "",
     }),
     tile({
       target: "missing",
