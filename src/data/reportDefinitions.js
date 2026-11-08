@@ -1,4 +1,5 @@
 import { listMembershipLevels } from "./membershipLevelsRepository.js";
+import { formatMonthYear } from "./dateFormat.js";
 import { formatMemberCode } from "./memberRepository.js";
 import {
   currentPeriod,
@@ -8,6 +9,15 @@ import {
   yearBounds,
 } from "./hoursRepository.js";
 import {
+  countCardChanges,
+  getSharedTotals,
+  listAllSharedMembers,
+  listSharedGroupsPage,
+  countCardStates,
+  listAllCardChanges,
+  listCardChangesPage,
+  listAllCardStatus,
+  listCardStatusPage,
   countMembersExpiring,
   listAllIncompleteMembers,
   listIncompleteMembersPage,
@@ -31,7 +41,8 @@ import {
  *   loadPage(filters, { page, pageSize })
  *              -> { rows, total, page, summary?, notes? }   (ONE page, for the screen)
  *   loadAll(filters) -> rows                                (everything, for downloads/copy)
- *   columns    - { label, value(row), tag?(row) -> CSS class, show?(filters), exportOnly? }
+ *   columns    - { label, value(row), display?(row), tag?(row) -> CSS class, show?(filters),
+ *                  exportOnly? (downloads only), screenOnly? (screen only) }
  *   actions    - extra buttons: { id, label, run(allRows, filters) -> { text, message } }
  *   exportName(filters), resultsTitle?(filters), emptyMessage
  * To add a report, add an object here and list it in REPORTS at the bottom.
@@ -191,7 +202,11 @@ const expiringReport = {
     { label: "Code", value: (r) => formatMemberCode(r.code_number) },
     { label: "Name", value: (r) => r.name },
     { label: "Level", value: (r) => r.membership_levels?.name ?? "" },
-    { label: "Expiry date", value: (r) => r.membership_expiry_date },
+    {
+      label: "Expiry date",
+      value: (r) => r.membership_expiry_date, // downloads keep the full date
+      display: (r) => formatMonthYear(r.membership_expiry_date), // screen: month and year
+    },
     {
       label: "Time left",
       value: (r) => timeLeft(r.daysLeft),
@@ -293,7 +308,7 @@ const hoursReport = {
         { label: "Members listed", value: totals.members_count },
         { label: "Clinical total", value: formatDuration(totals.clinical_minutes) },
         { label: "Supervision total", value: formatDuration(totals.supervision_minutes) },
-        { label: "OPD points total", value: totals.opd_points },
+        { label: "OPD points total", value: round2(Number(totals.opd_points)) },
         {
           label: filters.period === "monthly" ? "Not recorded this month" : "No records this year",
           value: totals.members_without_records,
@@ -309,7 +324,7 @@ const hoursReport = {
     { label: "Status", value: (r) => statusText(r.member_status), tag: (r) => statusTag(r.member_status) },
     { label: "Clinical", value: (r) => (r.months_recorded ? formatDuration(r.clinical_minutes) : "") },
     { label: "Supervision", value: (r) => (r.months_recorded ? formatDuration(r.supervision_minutes) : "") },
-    { label: "OPD points", value: (r) => (r.months_recorded ? r.opd_points : "") },
+    { label: "OPD points", value: (r) => (r.months_recorded ? round2(Number(r.opd_points)) : "") },
     {
       label: "Recorded",
       show: (filters) => filters.period === "monthly",
@@ -586,9 +601,376 @@ const incompleteReport = {
   emptyMessage: "No members are missing the ticked details.",
 };
 
+/* ------------------------- 5. Card status ------------------------- */
+
+const CARD_STATE_LABELS = {
+  due: "Card due",
+  post: "Posted",
+  collect: "Collected",
+};
+
+function cardOptions(filters) {
+  return {
+    cardState: filters.cardState,
+    status: filters.status,
+    levelId: filters.levelId === "all" ? null : filters.levelId,
+    search: filters.search,
+  };
+}
+
+const cardsReport = {
+  id: "cards",
+  title: "Card status",
+  description:
+    "Which members have been given a physical card for their current membership expiry date, and which are still due one.",
+  filters: [
+    MEMBER_FILTER,
+    {
+      name: "cardState",
+      label: "Card",
+      type: "select",
+      default: "due",
+      options: [
+        ["due", "Card due (no card yet)"],
+        ["all", "All members"],
+        ["issued", "Issued (any)"],
+        ["post", "Posted"],
+        ["collect", "Collected"],
+      ],
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      default: "active",
+      options: STATUS_OPTIONS,
+    },
+    {
+      name: "levelId",
+      label: "Membership level",
+      type: "select",
+      default: "all",
+      options: async () => {
+        const levels = await listMembershipLevels();
+        return [
+          ["all", "All levels"],
+          ...levels.map((level) => [
+            level.id,
+            level.is_active ? level.name : `${level.name} (inactive)`,
+          ]),
+        ];
+      },
+    },
+  ],
+  async loadPage(filters, { page, pageSize }) {
+    const options = cardOptions(filters);
+    const [result, counts] = await Promise.all([
+      listCardStatusPage(options, page, pageSize),
+      countCardStates(options),
+    ]);
+
+    return {
+      rows: result.rows,
+      total: result.total,
+      page: result.page,
+      summary: [
+        { label: "Card due", value: counts.due },
+        { label: "Posted", value: counts.post },
+        { label: "Collected", value: counts.collect },
+      ],
+    };
+  },
+  loadAll: (filters) => listAllCardStatus(cardOptions(filters)),
+  columns: [
+    { label: "Code", value: (r) => formatMemberCode(r.code_number) },
+    { label: "Name", value: (r) => r.name },
+    { label: "Level", value: (r) => r.level_name ?? "" },
+    {
+      label: "Expiry date",
+      value: (r) => r.membership_expiry_date, // downloads keep the full date
+      display: (r) => formatMonthYear(r.membership_expiry_date), // screen: month and year
+    },
+    {
+      label: "Card",
+      value: (r) => CARD_STATE_LABELS[r.card_state] ?? r.card_state,
+      tag: (r) => (r.card_state === "due" ? "status-warning" : "status-active"),
+    },
+    { label: "Date", value: (r) => r.issued_date ?? "" },
+    { label: "Level on card", value: (r) => r.card_level_name ?? "" },
+    { label: "Note", value: (r) => r.note ?? "" },
+    { label: "Status", value: (r) => statusText(r.status), tag: (r) => statusTag(r.status) },
+  ],
+  exportName: (filters) => `card-status-${filters.cardState}-${dateString(todayParts())}`,
+  emptyMessage: "No members match these filters.",
+};
+
+/* ---------------------- 6. Card level changes ---------------------- */
+
+function changeOptions(filters) {
+  const months = Number(filters.period);
+  return {
+    change: filters.change,
+    status: filters.status,
+    search: filters.search,
+    fromDate: months ? dateString(addMonths(todayParts(), -months)) : null,
+  };
+}
+
+const cardChangesReport = {
+  id: "cardchanges",
+  title: "Card level changes",
+  description:
+    "Physical cards compared with the member's previous card (the digital ID at registration, or an earlier card): did the membership level change, and how many days later.",
+  filters: [
+    MEMBER_FILTER,
+    {
+      name: "change",
+      label: "Show",
+      type: "select",
+      default: "changed",
+      options: [
+        ["changed", "Level changed"],
+        ["same", "Same level"],
+        ["all", "All cards"],
+      ],
+    },
+    {
+      name: "period",
+      label: "Card issued in the last",
+      type: "select",
+      default: "0",
+      options: [
+        ["0", "Any time"],
+        ["3", "3 months"],
+        ["6", "6 months"],
+        ["12", "12 months"],
+      ],
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      default: "all",
+      options: STATUS_OPTIONS,
+    },
+  ],
+  async loadPage(filters, { page, pageSize }) {
+    const options = changeOptions(filters);
+    const [result, counts] = await Promise.all([
+      listCardChangesPage(options, page, pageSize),
+      countCardChanges(options),
+    ]);
+
+    return {
+      rows: result.rows,
+      total: result.total,
+      page: result.page,
+      summary: [
+        { label: "Level changed", value: counts.changed },
+        { label: "Same level", value: counts.same },
+      ],
+    };
+  },
+  loadAll: (filters) => listAllCardChanges(changeOptions(filters)),
+  columns: [
+    // On screen: four short columns. Downloads: the full detail (the exportOnly columns).
+    {
+      label: "Member",
+      value: (r) => `${formatMemberCode(r.code_number)} · ${r.name}`,
+      screenOnly: true,
+    },
+    {
+      label: "Level",
+      value: (r) =>
+        r.level_changed
+          ? `${r.previous_level_name} → ${r.level_name}`
+          : `${r.level_name} · no change`,
+      tag: (r) => (r.level_changed ? "status-warning" : "status-active"),
+      screenOnly: true,
+    },
+    {
+      label: "Card",
+      value: (r) => `${CARD_STATE_LABELS[r.delivery_method] ?? r.delivery_method} ${r.issued_date ?? ""}`,
+      screenOnly: true,
+    },
+    {
+      label: "Since previous card",
+      value: (r) => (r.days_since_previous === null || r.days_since_previous === undefined
+        ? ""
+        : `${r.days_since_previous} ${r.days_since_previous === 1 ? "day" : "days"}`),
+      screenOnly: true,
+    },
+    { label: "Code", value: (r) => formatMemberCode(r.code_number), exportOnly: true },
+    { label: "Name", value: (r) => r.name, exportOnly: true },
+    { label: "Previous level", value: (r) => r.previous_level_name ?? "", exportOnly: true },
+    { label: "Level on card", value: (r) => r.level_name ?? "", exportOnly: true },
+    {
+      label: "Change",
+      value: (r) => (r.level_changed ? "Changed" : "Same level"),
+      exportOnly: true,
+    },
+    { label: "Previous card date", value: (r) => r.previous_date ?? "", exportOnly: true },
+    { label: "Card date", value: (r) => r.issued_date ?? "", exportOnly: true },
+    { label: "Days between", value: (r) => r.days_since_previous ?? "", exportOnly: true },
+    {
+      label: "Card",
+      value: (r) => CARD_STATE_LABELS[r.delivery_method] ?? r.delivery_method,
+      exportOnly: true,
+    },
+    { label: "Status", value: (r) => statusText(r.status), exportOnly: true },
+  ],
+  exportName: (filters) => `card-level-changes-${filters.change}-${dateString(todayParts())}`,
+  emptyMessage: "No cards match these filters.",
+};
+
+/* ------------------------- 7. Shared details ------------------------- */
+
+const SHARED_FIELDS = [
+  ["name", "Name"],
+  ["email", "Email"],
+  ["phone", "Phone"],
+  ["organisation", "Organisation"],
+];
+
+const WHO_SHOWN = 5; // names listed before "+N more"
+
+function sharedOptions(filters) {
+  return {
+    fields: filters.fields,
+    status: filters.status,
+    levelId: filters.levelId === "all" ? null : filters.levelId,
+    search: filters.search,
+    maxSize: filters.size === "any" ? null : Number(filters.size),
+  };
+}
+
+const escapeText = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+// The members of a group: the first few, and a button that opens the rest inside the row.
+function whoHtml(members) {
+  const list = members ?? [];
+  const items = list.map((member, index) =>
+    `<li${index >= WHO_SHOWN ? ' class="shared-more" hidden' : ""}>${
+      escapeText(formatMemberCode(member.code))
+    } ${escapeText(member.name)}</li>`
+  ).join("");
+
+  const hiddenCount = list.length - WHO_SHOWN;
+  const more = hiddenCount > 0
+    ? `<button type="button" class="text-button" data-expand data-hidden="${hiddenCount}">+${hiddenCount} more ▾</button>`
+    : "";
+
+  return `<div class="shared-who"><ul>${items}</ul>${more}</div>`;
+}
+
+const sharedReport = {
+  id: "shared",
+  title: "Shared details",
+  description:
+    "Find members who share the same name, email, phone or organisation. Tick what to compare: members are grouped when all the ticked details match.",
+  filters: [
+    MEMBER_FILTER,
+    {
+      name: "fields",
+      label: "Compare",
+      type: "checkboxes",
+      default: () => ["email"],
+      options: SHARED_FIELDS,
+    },
+    {
+      name: "size",
+      label: "Show groups of",
+      type: "select",
+      default: "any",
+      options: [
+        ["any", "Any size"],
+        ["5", "2–5 members"],
+        ["10", "2–10 members"],
+        ["20", "2–20 members"],
+      ],
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      default: "all",
+      options: STATUS_OPTIONS,
+    },
+    {
+      name: "levelId",
+      label: "Membership level",
+      type: "select",
+      default: "all",
+      options: async () => {
+        const levels = await listMembershipLevels();
+        return [
+          ["all", "All levels"],
+          ...levels.map((level) => [
+            level.id,
+            level.is_active ? level.name : `${level.name} (inactive)`,
+          ]),
+        ];
+      },
+    },
+  ],
+  async loadPage(filters, { page, pageSize }) {
+    if (!filters.fields.length) {
+      return {
+        rows: [],
+        total: 0,
+        page: 1,
+        summary: [],
+        notes: ["Tick at least one detail to compare."],
+      };
+    }
+
+    const options = sharedOptions(filters);
+    const [result, totals] = await Promise.all([
+      listSharedGroupsPage(options, page, pageSize),
+      getSharedTotals(options),
+    ]);
+
+    return {
+      rows: result.rows,
+      total: result.total,
+      page: result.page,
+      summary: [
+        { label: "Shared groups", value: totals.groups },
+        { label: "Members involved", value: totals.members },
+      ],
+    };
+  },
+  loadAll: (filters) =>
+    filters.fields.length ? listAllSharedMembers(sharedOptions(filters)) : [],
+  columns: [
+    // On screen: one row per group. Downloads: one row per member (the exportOnly columns).
+    { label: "Shared by", value: (r) => r.shared_value, screenOnly: true },
+    { label: "Members", value: (r) => r.members_count, screenOnly: true },
+    { label: "Who", value: (r) => "", html: (r) => whoHtml(r.members), screenOnly: true },
+    { label: "Shared value", value: (r) => r.shared_value, exportOnly: true },
+    { label: "Group size", value: (r) => r.members_count, exportOnly: true },
+    { label: "Code", value: (r) => formatMemberCode(r.code_number), exportOnly: true },
+    { label: "Name", value: (r) => r.member_name, exportOnly: true },
+    { label: "Level", value: (r) => r.level_name ?? "", exportOnly: true },
+    { label: "Status", value: (r) => statusText(r.member_status), exportOnly: true },
+    { label: "Email", value: (r) => r.email ?? "", exportOnly: true },
+    { label: "Phone", value: (r) => r.phone ?? "", exportOnly: true },
+    { label: "Organisation", value: (r) => r.organisation ?? "", exportOnly: true },
+  ],
+  exportName: (filters) =>
+    `shared-details-${filters.fields.join("-") || "none"}-${dateString(todayParts())}`,
+  emptyMessage: "No members share the ticked details.",
+};
+
 /* ------------------------------------------------------------------ */
 
-export const REPORTS = [expiringReport, hoursReport, emailsReport, incompleteReport];
+export const REPORTS = [expiringReport, hoursReport, emailsReport, incompleteReport, cardsReport, cardChangesReport, sharedReport];
 
 export function findReport(id) {
   return REPORTS.find((report) => report.id === id);
