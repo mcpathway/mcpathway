@@ -1,4 +1,4 @@
-import { getCurrentUser, signIn, signOut } from "./data/authRepository.js";
+ import { getCurrentUser, signIn, signOut } from "./data/authRepository.js";
 import {
   createMembershipLevel,
   deleteMembershipLevel,
@@ -9,6 +9,7 @@ import {
   createMember,
   deleteMember,
   listAllMembersForExport,
+  listOrganisations,
   listMembersPage,
   MEMBERS_PAGE_SIZE,
   restoreMember,
@@ -28,7 +29,16 @@ import {
   exportMembersCsv,
   exportMembersXlsx,
 } from "./data/memberExport.js";
+import {
+  createCard,
+  deleteCard,
+  listCardsForMember,
+  listDeletedCardsForMember,
+  restoreCard,
+  updateCard,
+} from "./data/cardRepository.js";
 import { getDashboardSummary } from "./data/dashboardRepository.js";
+import { renderCardForm, renderMemberCards } from "./views/cardsView.js";
 import { renderDashboard } from "./views/dashboardView.js";
 import {
   renderHoursForm,
@@ -36,6 +46,7 @@ import {
   renderHoursYear,
 } from "./views/hoursView.js";
 import { renderLogin } from "./views/loginView.js";
+import { renderOpdCalculator } from "./views/opdView.js";
 import { renderMemberForm, renderMembers } from "./views/membersView.js";
 import { renderMembershipLevels } from "./views/membershipLevelsView.js";
 import { findReport, REPORTS } from "./data/reportDefinitions.js";
@@ -46,6 +57,7 @@ import { renderReport, renderReportsHome } from "./views/reportsView.js";
 const app = document.querySelector("#app");
 
 async function signOutAndShowLogin() {
+  lastSummary = null;
   try {
     await signOut();
   } finally {
@@ -53,22 +65,49 @@ async function signOutAndShowLogin() {
   }
 }
 
+// The last dashboard numbers, so coming back to the dashboard doesn't flash an empty summary.
+let lastSummary = null;
+
 async function showDashboard(user) {
   renderDashboard(app, {
     profile: user.profile,
     onManageMembers: () => showMembers(user),
     onManageHours: () => showHoursPicker(user),
+    onManageCards: () => showCardsPicker(user),
+    onOpenOpd: () => showOpdCalculator(user),
     onOpenReports: () => showReportsHome(user),
     onManageLevels: () => showMembershipLevels(user),
     loadSummary: getDashboardSummary,
+    initialSummary: lastSummary,
+    onSummaryLoaded: (summary) => {
+      lastSummary = summary;
+    },
     onOpenReport: (id, filters) => showReport(user, id, { filters, fromDashboard: true }),
+    onSignOut: signOutAndShowLogin,
+  });
+}
+
+/* -------------------------- OPD calculator -------------------------- */
+
+function showOpdCalculator(user) {
+  renderOpdCalculator(app, {
+    profile: user.profile,
+    onBack: () => showDashboard(user),
     onSignOut: signOutAndShowLogin,
   });
 }
 
 /* ---------------------------- Members ---------------------------- */
 
-const freshListState = () => ({ page: 1, search: "", showDeleted: false });
+const freshListState = () => ({
+  page: 1,
+  search: "",
+  showDeleted: false,
+  levelId: "",
+  expiry: "",
+  organisation: "",
+  sort: "newest",
+});
 
 // The list screen remembers its page and search, so coming back from the
 // add/edit screen returns to the same place.
@@ -79,10 +118,16 @@ function showMembers(user, listState = freshListState()) {
     profile: user.profile,
     initialState: state,
     pageSize: MEMBERS_PAGE_SIZE,
-    loadPage: ({ page, search, showDeleted }) =>
+    loadLevels: listMembershipLevels,
+    loadOrganisations: listOrganisations,
+    loadPage: ({ page, search, showDeleted, levelId, expiry, organisation, sort }) =>
       listMembersPage({
         page,
         search,
+        levelId,
+        expiry,
+        organisation,
+        sort,
         includeDeleted: showDeleted && user.profile.role === "admin",
         pageSize: MEMBERS_PAGE_SIZE,
       }),
@@ -103,8 +148,8 @@ function showMembers(user, listState = freshListState()) {
       ensureAdmin(user, "Only the admin account can restore members.");
       await restoreMember(id);
     },
-    onExport: async (format) => {
-      const all = await listAllMembersForExport();
+    onExport: async (format, filters) => {
+      const all = await listAllMembersForExport(filters);
       if (format === "csv") exportMembersCsv(all);
       else await exportMembersXlsx(all);
     },
@@ -142,6 +187,109 @@ async function showMemberForm(user, member, listState) {
       }
     },
     onCancel: () => showMembers(user, listState),
+    onSignOut: signOutAndShowLogin,
+  });
+}
+
+/* ------------------------------ Cards ------------------------------ */
+
+function showCardsPicker(user) {
+  renderHoursMemberPicker(app, {
+    profile: user.profile,
+    title: "Manage cards",
+    description: "Find a member by name or code number, then record or review their physical cards.",
+    onSearch: searchMembersForHours,
+    onSelect: (member) =>
+      showMemberCards(user, member, {
+        from: { label: "Change member", go: () => showCardsPicker(user) },
+      }),
+    onBack: () => showDashboard(user),
+    onSignOut: signOutAndShowLogin,
+  });
+}
+
+// ctx = { from: { label, go }, showDeleted } - carried between the cards list
+// and the card form so the back link and the "show deleted" choice survive.
+async function showMemberCards(user, member, ctx = {}) {
+  const isAdmin = user.profile.role === "admin";
+  const showDeleted = Boolean(ctx.showDeleted) && isAdmin;
+  const nextCtx = { from: ctx.from, showDeleted };
+  const reload = (extra = {}) => showMemberCards(user, member, { ...nextCtx, ...extra });
+
+  app.innerHTML = '<p class="loading">Loading cards…</p>';
+
+  let cards = [];
+  let deletedCards = null;
+  let loadError = null;
+  try {
+    cards = await listCardsForMember(member.id);
+    if (showDeleted) deletedCards = await listDeletedCardsForMember(member.id);
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : "Unable to load cards.";
+  }
+
+  renderMemberCards(app, {
+    profile: user.profile,
+    member,
+    cards,
+    deletedCards,
+    showDeleted,
+    loadError,
+    from: ctx.from,
+    onToggleDeleted: (checked) => reload({ showDeleted: checked }),
+    onAdd: () => showCardForm(user, member, null, nextCtx),
+    onEdit: (card) => showCardForm(user, member, card, nextCtx),
+    onDelete: async (card) => {
+      ensureAdmin(user, "Only the admin account can delete cards.");
+      await deleteCard(card.id);
+      await reload();
+    },
+    onRestore: async (card) => {
+      ensureAdmin(user, "Only the admin account can restore cards.");
+      await restoreCard(card.id);
+      await reload();
+    },
+    onSignOut: signOutAndShowLogin,
+  });
+}
+
+async function showCardForm(user, member, card, ctx) {
+  app.innerHTML = '<p class="loading">Loading…</p>';
+
+  let levels = [];
+  let loadError = null;
+  try {
+    levels = await listMembershipLevels();
+  } catch (error) {
+    loadError = error instanceof Error
+      ? error.message
+      : "Unable to load membership levels.";
+  }
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  renderCardForm(app, {
+    profile: user.profile,
+    member,
+    levels,
+    card,
+    loadError,
+    today,
+    onSave: async (values) => {
+      if (card) {
+        await updateCard(card.id, values);
+      } else {
+        await createCard({
+          ...values,
+          memberId: member.id,
+          validUntil: member.membership_expiry_date,
+        });
+      }
+      await showMemberCards(user, member, ctx);
+    },
+    onCancel: () => showMemberCards(user, member, ctx),
     onSignOut: signOutAndShowLogin,
   });
 }
@@ -331,7 +479,20 @@ function showLoggedOut() {
   });
 }
 
+// Public link, no login needed: https://mcpathway.github.io/mcpathway/#/opd
+// It is the only screen that opens before the login check, and it never uses the database.
+// "#/opd", "#/OPD", "#/opd/" and "#opd" all open it.
+const isOpdLink = () =>
+  window.location.hash.toLowerCase().replace(/^#\/?/, "").replace(/\/+$/, "") === "opd";
+
+window.addEventListener("hashchange", () => window.location.reload());
+
 async function start() {
+  if (isOpdLink()) {
+    renderOpdCalculator(app, { profile: null });
+    return;
+  }
+
   app.innerHTML = '<p class="loading">Opening Pathway Admin…</p>';
   try {
     const user = await getCurrentUser();
