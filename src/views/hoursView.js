@@ -20,6 +20,8 @@ export function renderHoursMemberPicker(
     onSelect, // (member) => void
     onBack,
     onSignOut,
+    title = "Manage hours", // the cards screen reuses this picker with its own wording
+    description = "Find a member by name or code number, then choose the year.",
   },
 ) {
   container.innerHTML = `
@@ -29,8 +31,8 @@ export function renderHoursMemberPicker(
         <div class="section-header">
           <div>
             <button class="text-button" id="back-to-dashboard" type="button">← Dashboard</button>
-            <h2>Manage hours</h2>
-            <p>Find a member by name or code number, then choose the year.</p>
+            <h2>${escapeHtml(title)}</h2>
+            <p>${escapeHtml(description)}</p>
           </div>
         </div>
         <section class="editor-card picker-card">
@@ -176,7 +178,7 @@ export function renderHoursYear(
   const byMonth = new Map(
     records.map((record) => [Number(String(record.period_month).slice(5, 7)), record]),
   );
-  const sum = (key) => records.reduce((total, record) => total + record[key], 0);
+  const sum = (key) => records.reduce((total, record) => total + Number(record[key]), 0);
   const expectedMonths = year === current.year ? current.month : 12;
 
   const body = loadError
@@ -185,7 +187,7 @@ export function renderHoursYear(
       <dl class="totals" aria-label="Totals for ${year}">
         <div class="total-tile"><dt>Clinical</dt><dd>${formatDuration(sum("clinical_minutes"))}</dd></div>
         <div class="total-tile"><dt>Supervision</dt><dd>${formatDuration(sum("supervision_minutes"))}</dd></div>
-        <div class="total-tile"><dt>OPD points</dt><dd>${sum("opd_points")}</dd></div>
+        <div class="total-tile"><dt>OPD points</dt><dd>${formatPoints(sum("opd_points"))}</dd></div>
         <div class="total-tile"><dt>Months recorded</dt><dd>${records.length} of ${expectedMonths}</dd></div>
       </dl>
       <section class="list-card">
@@ -244,6 +246,7 @@ export function renderHoursYear(
       ? `<button class="text-button" id="this-year" type="button">Back to ${current.year}</button>`
       : ""
   }
+          <a class="text-button" href="#/opd" target="_blank" rel="noopener">OPD calculator ↗</a>
         </div>
         ${body}
       </main>
@@ -322,17 +325,17 @@ function monthRow(month, year, current, record, isAdmin) {
     cells = `
       <td data-label="Clinical">${formatDuration(record.clinical_minutes)}</td>
       <td data-label="Supervision">${formatDuration(record.supervision_minutes)}</td>
-      <td data-label="OPD points">${record.opd_points}</td>`;
-    actions = `<button class="button button-secondary button-small" data-edit-month="${month}" type="button">Edit</button>${
+      <td data-label="OPD points">${formatPoints(record.opd_points)}</td>`;
+    actions = `<button class="text-button" data-edit-month="${month}" type="button">Edit</button>${
       isAdmin
-        ? `<button class="button button-secondary button-small text-button-danger" data-delete-record="${escapeHtml(record.id)}" type="button">Delete</button>`
+        ? `<button class="text-button text-button-danger" data-delete-record="${escapeHtml(record.id)}" type="button">Delete</button>`
         : ""
     }`;
   } else if (future) {
     cells = '<td class="muted-cell" colspan="3">Upcoming</td>';
   } else {
     cells = '<td class="muted-cell" colspan="3">Not recorded</td>';
-    actions = `<button class="button button-secondary button-small" data-add-month="${month}" type="button">Add hours</button>`;
+    actions = `<button class="text-button" data-add-month="${month}" type="button">Add hours</button>`;
   }
 
   return `
@@ -361,8 +364,8 @@ function deletedSection(deletedRecords, year) {
           <li>
             <span><strong>${MONTH_NAMES[month - 1]}</strong> · Clinical ${
         formatDuration(record.clinical_minutes)
-      } · Supervision ${formatDuration(record.supervision_minutes)} · OPD ${record.opd_points}</span>
-            <button class="button button-secondary button-small" data-restore-record="${escapeHtml(record.id)}" type="button">Restore</button>
+      } · Supervision ${formatDuration(record.supervision_minutes)} · OPD ${formatPoints(record.opd_points)}</span>
+            <button class="text-button" data-restore-record="${escapeHtml(record.id)}" type="button">Restore</button>
           </li>`;
     }).join("")
   }
@@ -415,10 +418,12 @@ export function renderHoursForm(
   }
             <label class="field" for="opd-points">
               OPD points
-              <input id="opd-points" name="opdPoints" type="text" inputmode="numeric" autocomplete="off"
-                placeholder="0" value="${editing ? record.opd_points : ""}" />
+              <input id="opd-points" name="opdPoints" type="text" inputmode="decimal" autocomplete="off"
+                placeholder="0" value="${editing ? formatPoints(record.opd_points) : ""}" />
             </label>
-            <p class="field-hint">Leave a box empty to record 0. Minutes must be between 0 and 59.</p>
+            <p class="field-hint">Leave a box empty to record 0. Minutes must be between 0 and 59. OPD points can have decimals, for example 1.5.
+              Not sure how many OPD points a training earns?
+              <a class="text-button" href="#/opd" target="_blank" rel="noopener">Estimate with the OPD calculator ↗</a></p>
             <div class="form-actions">
               <button class="button button-small" id="save-hours" type="submit">${
     editing ? "Save changes" : "Save hours"
@@ -508,14 +513,13 @@ function previewDuration(hoursText, minutesText) {
 /* Shared pieces                                                       */
 /* ------------------------------------------------------------------ */
 
+// 3 -> "3", 1.5 -> "1.5", 0.25 -> "0.25" (hides the trailing zeros of the stored decimals).
+function formatPoints(value) {
+  return String(Math.round(Number(value) * 100) / 100);
+}
+
 function memberCard(member) {
   const expiry = expiryState(member.membership_expiry_date);
-
-  const membership_expiry_date = new Date(member.membership_expiry_date);
-  const formatted_membership_expiry_date = membership_expiry_date.toLocaleDateString('en-US', {
-                                            month: 'short', // "October" (use 'short' for "Oct")
-                                            year: 'numeric' // "2026"
-                                          });
 
   return `
     <section class="member-card" aria-label="Selected member">
@@ -528,7 +532,7 @@ function memberCard(member) {
         <span class="status ${member.status === "active" ? "status-active" : "status-inactive"}">${
     member.status === "active" ? "Active" : "Suspended"
   }</span>
-        <span>Expires ${escapeHtml(formatted_membership_expiry_date)}${
+        <span>Expires ${escapeHtml(member.membership_expiry_date)}${
     expiry ? ` <span class="status ${expiry.className}">${expiry.label}</span>` : ""
   }</span>
       </p>
