@@ -2,6 +2,23 @@ import { formatMemberCode } from "../data/memberRepository.js";
 
 const SEARCH_DELAY_MS = 300;
 
+const EXPIRY_OPTIONS = [
+  ["", "Any"],
+  ["expired", "Expired"],
+  ["1", "Expiring within 1 month"],
+  ["3", "Expiring within 3 months"],
+  ["6", "Expiring within 6 months"],
+  ["valid", "Still valid"],
+];
+
+const SORT_OPTIONS = [
+  ["newest", "Newest first"],
+  ["oldest", "Oldest first"],
+  ["name", "Name A–Z"],
+  ["expiry_soon", "Expiry: soonest first"],
+  ["expiry_late", "Expiry: latest first"],
+];
+
 /* ------------------------------------------------------------------ */
 /* Screen 1: the members list (search, pages, export, Add button)      */
 /* ------------------------------------------------------------------ */
@@ -10,22 +27,33 @@ export function renderMembers(
   container,
   {
     profile,
-    initialState, // { page, search, showDeleted } - restored when coming back from the form
+    initialState, // { page, search, showDeleted, levelId, expiry, sort } - restored when coming back from the form
     pageSize,
-    loadPage, // ({ page, search, showDeleted }) => Promise<{ members, total, page }>
+    loadLevels, // async () => membership levels (for the level filter)
+    loadOrganisations, // async () => organisation names (suggestions for the organisation filter)
+    loadPage, // ({ page, search, showDeleted, levelId, expiry, sort }) => Promise<{ members, total, page }>
     onStateChange, // remembers page/search so Back from the form returns here
     onAdd,
     onEdit, // (member) => void
     onHours, // (member) => void - opens that member's hours
     onDelete, // (id) => Promise<void>
     onRestore, // (id) => Promise<void>
-    onExport, // (format: "csv" | "xlsx") => Promise<void>
+    onExport, // (format: "csv" | "xlsx", { search, levelId, expiry, organisation, sort }) => Promise<void> - follows the filters
     onBack,
     onSignOut,
   },
 ) {
   const isAdmin = profile.role === "admin";
-  const state = { page: 1, search: "", showDeleted: false, ...initialState };
+  const state = {
+    page: 1,
+    search: "",
+    showDeleted: false,
+    levelId: "",
+    expiry: "",
+    organisation: "",
+    sort: "newest",
+    ...initialState,
+  };
   if (!isAdmin) state.showDeleted = false;
 
   container.innerHTML = `
@@ -44,6 +72,7 @@ export function renderMembers(
           <div class="list-toolbar">
             <input id="member-search" type="search" placeholder="Search name or code…" aria-label="Search members by name or code" autocomplete="off" />
             <div class="toolbar-actions">
+              <button class="button button-secondary button-small" id="toggle-filters" type="button" aria-expanded="false" aria-controls="filter-panel">Filters</button>
               ${
     isAdmin
       ? `<label class="checkbox-field" for="show-deleted">
@@ -56,6 +85,30 @@ export function renderMembers(
               <button class="button button-secondary button-small" id="export-xlsx" type="button">Download Excel</button>
             </div>
           </div>
+          <div class="filter-panel" id="filter-panel" hidden>
+            <label class="field" for="filter-level">
+              Membership level
+              <select id="filter-level"><option value="">All levels</option></select>
+            </label>
+            <label class="field" for="filter-expiry">
+              Expiry
+              <select id="filter-expiry">
+                ${EXPIRY_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field" for="filter-organisation">
+              Organisation
+              <input id="filter-organisation" type="search" list="organisation-list" maxlength="200" autocomplete="off" placeholder="Part of the name…" />
+              <datalist id="organisation-list"></datalist>
+            </label>
+            <label class="field" for="filter-sort">
+              Sort by
+              <select id="filter-sort">
+                ${SORT_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+          <div class="filter-chips" id="filter-chips" aria-live="polite"></div>
           <p class="message" id="export-message" role="alert"></p>
           <div id="members-results" aria-live="polite"></div>
         </section>
@@ -67,13 +120,135 @@ export function renderMembers(
   const searchInput = container.querySelector("#member-search");
   const showDeletedBox = container.querySelector("#show-deleted");
   const exportMessage = container.querySelector("#export-message");
+  const filterButton = container.querySelector("#toggle-filters");
+  const filterPanel = container.querySelector("#filter-panel");
+  const levelSelect = container.querySelector("#filter-level");
+  const expirySelect = container.querySelector("#filter-expiry");
+  const sortSelect = container.querySelector("#filter-sort");
+  const organisationInput = container.querySelector("#filter-organisation");
+  const organisationList = container.querySelector("#organisation-list");
+  const chipsEl = container.querySelector("#filter-chips");
+
+  let levelNames = new Map(); // id -> name, for the filter chips
 
   searchInput.value = state.search;
+  expirySelect.value = state.expiry;
+  sortSelect.value = state.sort;
+  organisationInput.value = state.organisation;
   if (showDeletedBox) showDeletedBox.checked = state.showDeleted;
 
   container.querySelector("#back-to-dashboard").addEventListener("click", onBack);
   container.querySelector("#sign-out").addEventListener("click", onSignOut);
   container.querySelector("#add-member").addEventListener("click", onAdd);
+
+  // ---- Filters: level, expiry and sort order (the search box stays always visible) ----
+  const activeFilters = () => {
+    const chips = [];
+    if (state.levelId) chips.push(["levelId", levelNames.get(state.levelId) ?? "Selected level"]);
+    if (state.expiry) {
+      chips.push(["expiry", EXPIRY_OPTIONS.find(([value]) => value === state.expiry)?.[1] ?? state.expiry]);
+    }
+    if (state.organisation) chips.push(["organisation", `Organisation: ${state.organisation}`]);
+    return chips;
+  };
+
+  function drawFilterState() {
+    const chips = activeFilters();
+    filterButton.textContent = chips.length ? `Filters (${chips.length})` : "Filters";
+
+    chipsEl.innerHTML = chips.length
+      ? chips.map(([key, label]) =>
+          `<span class="filter-chip">${escapeHtml(label)}<button type="button" data-clear-filter="${key}" aria-label="Remove filter ${escapeHtml(label)}">×</button></span>`
+        ).join("") +
+        '<button class="text-button" type="button" data-clear-filter="all">Clear filters</button>'
+      : "";
+  }
+
+  function setPanelOpen(open) {
+    filterPanel.hidden = !open;
+    filterButton.setAttribute("aria-expanded", String(open));
+  }
+
+  filterButton.addEventListener("click", () => setPanelOpen(filterPanel.hidden));
+
+  levelSelect.addEventListener("change", () => {
+    state.levelId = levelSelect.value;
+    state.page = 1;
+    drawFilterState();
+    load();
+  });
+  expirySelect.addEventListener("change", () => {
+    state.expiry = expirySelect.value;
+    state.page = 1;
+    drawFilterState();
+    load();
+  });
+  let organisationTimer;
+  organisationInput.addEventListener("input", () => {
+    clearTimeout(organisationTimer);
+    organisationTimer = setTimeout(() => {
+      state.organisation = organisationInput.value.trim();
+      state.page = 1;
+      drawFilterState();
+      load();
+    }, SEARCH_DELAY_MS);
+  });
+
+  sortSelect.addEventListener("change", () => {
+    state.sort = sortSelect.value;
+    state.page = 1;
+    load();
+  });
+
+  chipsEl.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-clear-filter]");
+    if (!button) return;
+
+    const which = button.dataset.clearFilter;
+    if (which === "levelId" || which === "all") {
+      state.levelId = "";
+      levelSelect.value = "";
+    }
+    if (which === "expiry" || which === "all") {
+      state.expiry = "";
+      expirySelect.value = "";
+    }
+    if (which === "organisation" || which === "all") {
+      clearTimeout(organisationTimer);
+      state.organisation = "";
+      organisationInput.value = "";
+    }
+    state.page = 1;
+    drawFilterState();
+    load();
+  });
+
+  // The level list loads in the background; a failure just leaves "All levels".
+  Promise.resolve(loadLevels?.())
+    .then((levels) => {
+      if (!container.contains(levelSelect)) return; // the person already left this screen
+      levelNames = new Map(levels.map((level) => [level.id, level.name]));
+      levelSelect.innerHTML = '<option value="">All levels</option>' +
+        levels.map((level) =>
+          `<option value="${escapeHtml(level.id)}">${escapeHtml(level.name)}${level.is_active ? "" : " (inactive)"}</option>`
+        ).join("");
+      levelSelect.value = state.levelId;
+      drawFilterState();
+    })
+    .catch(() => {});
+
+  // Organisations already in use are offered as suggestions; typing part of a name works too.
+  Promise.resolve(loadOrganisations?.())
+    .then((names) => {
+      if (!container.contains(organisationList)) return;
+      organisationList.innerHTML = names
+        .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+        .join("");
+    })
+    .catch(() => {});
+
+  drawFilterState();
+  setPanelOpen(Boolean(state.levelId || state.expiry || state.organisation || state.sort !== "newest"));
 
   let members = [];
   let total = 0;
@@ -90,6 +265,10 @@ export function renderMembers(
         page: state.page,
         search: state.search,
         showDeleted: state.showDeleted,
+        levelId: state.levelId,
+        expiry: state.expiry,
+        organisation: state.organisation,
+        sort: state.sort,
       });
       if (thisRequest !== requestId) return;
 
@@ -112,10 +291,12 @@ export function renderMembers(
     if (!members.length) {
       results.innerHTML = `
         <div class="empty-results">
-          <h3>${state.search ? "No matching members" : "No members yet"}</h3>
+          <h3>${state.search || activeFilters().length ? "No matching members" : "No members yet"}</h3>
           <p>${
         state.search
-          ? `Nothing matches “${escapeHtml(state.search)}”. Try part of the name, or the code number.`
+          ? `Nothing matches “${escapeHtml(state.search)}”${activeFilters().length ? " with these filters" : ""}. Try part of the name, or the code number.`
+          : activeFilters().length
+          ? "No members match these filters. Try removing one."
           : "Use “Add member” to create the first one."
       }</p>
         </div>`;
@@ -229,7 +410,14 @@ export function renderMembers(
       exportMessage.textContent = "";
       button.disabled = true;
       try {
-        await onExport(format);
+        // Downloads follow what is on screen: the search, level, expiry and sort order.
+        await onExport(format, {
+          search: state.search,
+          levelId: state.levelId,
+          expiry: state.expiry,
+          organisation: state.organisation,
+          sort: state.sort,
+        });
       } catch (error) {
         exportMessage.textContent = error instanceof Error
           ? error.message
