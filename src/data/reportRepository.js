@@ -292,3 +292,192 @@ export function listAllIncompleteMembers(options) {
     ).order("code_number", { ascending: true })
   );
 }
+
+/* ---------------------- 5. Card status ---------------------- */
+
+const CARD_STATUS_COLUMNS = `
+  member_id, code_number, name, status, level_name, membership_expiry_date,
+  card_state, issued_date, card_level_name, note
+`;
+
+// `options` = { cardState, status, levelId, search }
+// cardState: "due", "post", "collect", "issued" (any physical card) or "all".
+function narrowCards(query, { cardState, status, levelId, search }) {
+  let q = query;
+  if (cardState === "issued") q = q.neq("card_state", "due");
+  else if (cardState && cardState !== "all") q = q.eq("card_state", cardState);
+
+  if (status && status !== "all") q = q.eq("status", status);
+  if (levelId) q = q.eq("membership_level_id", levelId);
+
+  const filter = buildSearchFilter(search);
+  if (filter) q = q.or(filter);
+  return q;
+}
+
+const orderCards = (query) =>
+  query
+    .order("membership_expiry_date", { ascending: true })
+    .order("code_number", { ascending: true });
+
+export function listCardStatusPage(options, page, pageSize) {
+  return fetchPage(
+    () =>
+      orderCards(narrowCards(
+        requireSupabase().from("member_card_status").select(CARD_STATUS_COLUMNS, { count: "exact" }),
+        options,
+      )),
+    page,
+    pageSize,
+  );
+}
+
+export function listAllCardStatus(options) {
+  return fetchAll(() =>
+    orderCards(narrowCards(
+      requireSupabase().from("member_card_status").select(CARD_STATUS_COLUMNS),
+      options,
+    ))
+  );
+}
+
+// How many members are in each card state, for the same member filters
+// (the card-state filter itself is ignored). Returns { due, post, collect }.
+export async function countCardStates(options) {
+  const count = async (state) => {
+    const { count: total, error } = await narrowCards(
+      requireSupabase().from("member_card_status").select("member_id", { count: "exact", head: true }),
+      { ...options, cardState: state },
+    );
+    if (error) throw error;
+    return total ?? 0;
+  };
+
+  const [due, post, collect] = await Promise.all([
+    count("due"),
+    count("post"),
+    count("collect"),
+  ]);
+
+  return { due, post, collect };
+}
+
+/* -------------------- 6. Card level changes -------------------- */
+
+const CHANGE_COLUMNS = `
+  card_id, member_id, code_number, name, status, delivery_method, issued_date,
+  level_name, previous_level_name, previous_date, previous_method,
+  days_since_previous, level_changed
+`;
+
+// `options` = { change, status, search, fromDate }
+// Lists physical cards that have an earlier card (digital or physical) to compare with.
+// change: "changed", "same" or "all"; fromDate: "YYYY-MM-DD" or null.
+function narrowChanges(query, { change, status, search, fromDate }) {
+  let q = query
+    .in("delivery_method", ["post", "collect"])
+    .not("previous_date", "is", null);
+
+  if (change === "changed") q = q.eq("level_changed", true);
+  else if (change === "same") q = q.eq("level_changed", false);
+
+  if (status && status !== "all") q = q.eq("status", status);
+  if (fromDate) q = q.gte("issued_date", fromDate);
+
+  const filter = buildSearchFilter(search);
+  if (filter) q = q.or(filter);
+  return q;
+}
+
+const orderChanges = (query) =>
+  query
+    .order("issued_date", { ascending: false })
+    .order("code_number", { ascending: true });
+
+export function listCardChangesPage(options, page, pageSize) {
+  return fetchPage(
+    () =>
+      orderChanges(narrowChanges(
+        requireSupabase().from("member_card_changes").select(CHANGE_COLUMNS, { count: "exact" }),
+        options,
+      )),
+    page,
+    pageSize,
+  );
+}
+
+export function listAllCardChanges(options) {
+  return fetchAll(() =>
+    orderChanges(narrowChanges(
+      requireSupabase().from("member_card_changes").select(CHANGE_COLUMNS),
+      options,
+    ))
+  );
+}
+
+// Returns { changed, same } for the same filters (the "change" filter itself is ignored).
+export async function countCardChanges(options) {
+  const count = async (change) => {
+    const { count: total, error } = await narrowChanges(
+      requireSupabase().from("member_card_changes").select("card_id", { count: "exact", head: true }),
+      { ...options, change },
+    );
+    if (error) throw error;
+    return total ?? 0;
+  };
+
+  const [changed, same] = await Promise.all([count("changed"), count("same")]);
+  return { changed, same };
+}
+
+/* ------------------------ 7. Shared details ------------------------ */
+
+// `options` = { fields, status, levelId, search, maxSize }
+// fields: any of "name", "email", "phone", "organisation" - members match when ALL ticked details match.
+// maxSize: the biggest group to show (null = any size). Groups always have at least 2 members.
+function sharedArguments({ fields, status, levelId, search, maxSize }) {
+  return {
+    p_fields: fields ?? [],
+    p_status: status && status !== "all" ? status : null,
+    p_level: levelId || null,
+    p_search: String(search ?? "").trim() || null,
+    p_min_size: 2,
+    p_max_size: maxSize ?? null,
+  };
+}
+
+// One row per group: { group_key, shared_value, members_count, members: [{ id, code, name, level }] }.
+export function listSharedGroupsPage(options, page, pageSize) {
+  return fetchPage(
+    () =>
+      requireSupabase()
+        .rpc("shared_details_report", sharedArguments(options), { count: "exact" })
+        .order("members_count", { ascending: false })
+        .order("shared_value", { ascending: true })
+        .order("group_key", { ascending: true }),
+    page,
+    pageSize,
+  );
+}
+
+// One row per member per group, for downloads.
+export function listAllSharedMembers(options) {
+  return fetchAll(() =>
+    requireSupabase()
+      .rpc("shared_details_members", sharedArguments(options))
+      .order("members_count", { ascending: false })
+      .order("shared_value", { ascending: true })
+      .order("group_key", { ascending: true })
+      .order("code_number", { ascending: true })
+  );
+}
+
+// { groups, members }: how many groups, and how many different members are in them.
+export async function getSharedTotals(options) {
+  const { data, error } = await requireSupabase()
+    .rpc("shared_details_totals", sharedArguments(options))
+    .single();
+
+  if (error) throw error;
+  return data;
+}
