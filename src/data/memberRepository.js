@@ -14,7 +14,69 @@ export function formatMemberCode(codeNumber) {
   return String(codeNumber).padStart(5, "0");
 }
 
-// One page of members, newest first (highest code number first).
+// How the member list can be sorted (the second sort is always the code number, for a stable order).
+export const MEMBER_SORTS = {
+  newest: [["code_number", false]],
+  oldest: [["code_number", true]],
+  name: [["name", true], ["code_number", true]],
+  expiry_soon: [["membership_expiry_date", true], ["code_number", true]],
+  expiry_late: [["membership_expiry_date", false], ["code_number", true]],
+};
+
+// "YYYY-MM-DD" for a Date, in the browser's own time zone.
+function dateText(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// Today plus some months; a day that doesn't exist in the target month (31 Jan + 1 month) becomes its last day.
+function monthsFromToday(months) {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(now.getDate(), lastDay));
+  return dateText(target);
+}
+
+// The conditions shared by the list and the downloads.
+//   levelId  "" = any level
+//   organisation  part of the organisation name ("" = any)
+//   expiry   "" = any, "expired", "valid" (not expired yet), or "1" / "3" / "6" = expires within that many months
+function narrowMembers(
+  query,
+  { search = "", includeDeleted = false, levelId = "", expiry = "", organisation = "" } = {},
+) {
+  let q = query;
+  if (!includeDeleted) q = q.is("deleted_at", null);
+
+  const filter = buildSearchFilter(search);
+  if (filter) q = q.or(filter);
+
+  if (levelId) q = q.eq("membership_level_id", levelId);
+
+  // Characters with a special meaning in a LIKE pattern are removed so the text can't change the match.
+  const org = String(organisation ?? "").replace(/[%_*\\]/g, " ").replace(/\s+/g, " ").trim();
+  if (org) q = q.ilike("organisation", `%${org}%`);
+
+  const today = dateText(new Date());
+  if (expiry === "expired") q = q.lt("membership_expiry_date", today);
+  else if (expiry === "valid") q = q.gte("membership_expiry_date", today);
+  else if (["1", "3", "6"].includes(String(expiry))) {
+    q = q.gte("membership_expiry_date", today).lte("membership_expiry_date", monthsFromToday(Number(expiry)));
+  }
+
+  return q;
+}
+
+function sortMembers(query, sort) {
+  let q = query;
+  for (const [column, ascending] of MEMBER_SORTS[sort] ?? MEMBER_SORTS.newest) {
+    q = q.order(column, { ascending });
+  }
+  return q;
+}
+
+// One page of members (newest first unless `sort` says otherwise).
 // `search` matches part of a name, or a code number ("12" or "00012").
 // Returns { members, total, page } where `page` is the page actually served
 // (it moves back to the last page if the requested one no longer exists,
@@ -24,26 +86,28 @@ export async function listMembersPage({
   pageSize = MEMBERS_PAGE_SIZE,
   search = "",
   includeDeleted = false,
+  levelId = "",
+  expiry = "",
+  organisation = "",
+  sort = "newest",
 } = {}) {
   const supabase = requireSupabase();
-  const filter = buildSearchFilter(search);
+  const filters = { search, includeDeleted, levelId, expiry, organisation };
 
   const run = (pageNumber, countOnly = false) => {
-    let query = supabase
-      .from("members")
-      .select(countOnly ? "id" : MEMBER_COLUMNS, {
-        count: "exact",
-        head: countOnly,
-      });
-
-    if (!includeDeleted) query = query.is("deleted_at", null);
-    if (filter) query = query.or(filter);
+    const query = narrowMembers(
+      supabase
+        .from("members")
+        .select(countOnly ? "id" : MEMBER_COLUMNS, {
+          count: "exact",
+          head: countOnly,
+        }),
+      filters,
+    );
     if (countOnly) return query;
 
     const from = (pageNumber - 1) * pageSize;
-    return query
-      .order("code_number", { ascending: false })
-      .range(from, from + pageSize - 1);
+    return sortMembers(query, sort).range(from, from + pageSize - 1);
   };
 
   let currentPage = Math.max(1, Math.floor(Number(page)) || 1);
@@ -75,19 +139,46 @@ export function buildSearchFilter(search) {
   return parts.join(",");
 }
 
-// Pages through every active member (used for exports, so the 1000-row
-// default limit can't silently truncate the file).
-export async function listAllMembersForExport() {
+// The organisations already in use (without repeats, ignoring capital letters), as suggestions
+// for the organisation filter.
+export async function listOrganisations() {
+  const { data, error } = await requireSupabase()
+    .from("members")
+    .select("organisation")
+    .is("deleted_at", null)
+    .not("organisation", "is", null)
+    .limit(EXPORT_PAGE_SIZE);
+
+  if (error) throw error;
+
+  const seen = new Map();
+  for (const { organisation } of data) {
+    const name = String(organisation ?? "").trim();
+    if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// Pages through every member that matches the filters (used for downloads, so the
+// 1000-row default limit can't silently truncate the file). Deleted members are never included.
+// `filters` = { search, levelId, expiry, organisation, sort } - the same choices as the list on screen.
+export async function listAllMembersForExport(
+  { search = "", levelId = "", expiry = "", organisation = "", sort = "newest" } = {},
+) {
   const supabase = requireSupabase();
   const all = [];
 
   for (let from = 0;; from += EXPORT_PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("members")
-      .select(MEMBER_COLUMNS)
-      .is("deleted_at", null)
-      .order("code_number", { ascending: true })
-      .range(from, from + EXPORT_PAGE_SIZE - 1);
+    const { data, error } = await sortMembers(
+      narrowMembers(supabase.from("members").select(MEMBER_COLUMNS), {
+        search,
+        includeDeleted: false,
+        levelId,
+        expiry,
+        organisation,
+      }),
+      sort,
+    ).range(from, from + EXPORT_PAGE_SIZE - 1);
 
     if (error) throw error;
     all.push(...data);
@@ -147,7 +238,8 @@ function normalizeMember(values) {
   const name = clean(values.name);
   const membershipLevelId = clean(values.membershipLevelId);
   const expiry = clean(values.membershipExpiryDate);
-  const email = optional(values.email);
+  // Stored in lower case, so Name@Mail.com and name@mail.com are the same address.
+  const email = optional(values.email)?.toLowerCase() ?? null;
   const status = clean(values.status) || "active";
 
   if (!name) throw new Error("Enter the member's name.");
@@ -198,6 +290,9 @@ function friendlyError(error) {
   }
   if (error.code === "23503") {
     return new Error("The selected membership level no longer exists.");
+  }
+  if (error.code === "23505" && String(error.message).includes("members_name_email_unique_idx")) {
+    return new Error("A member with this name and email address already exists.");
   }
   if (error.code === "PGRST116") {
     return new Error("That member record could not be found or can no longer be changed.");
