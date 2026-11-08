@@ -161,6 +161,16 @@ function wholeNumber(value, label) {
   return Number(text);
 }
 
+// OPD points: a number such as 3, 1.5 or 0.25 (up to two decimals). A blank box counts as 0.
+function points(value, label) {
+  const text = String(value ?? "").trim();
+  if (text === "") return 0;
+  if (!/^\d{1,4}(\.\d{1,2})?$/.test(text)) {
+    throw new Error(`${label} must be a number such as 3 or 1.5 (up to two decimals).`);
+  }
+  return Number(text);
+}
+
 function duration(hoursValue, minutesValue, label) {
   const hours = wholeNumber(hoursValue, `${label} hours`);
   const minutes = wholeNumber(minutesValue, `${label} minutes`);
@@ -177,7 +187,7 @@ function duration(hoursValue, minutesValue, label) {
 }
 
 function normalizeHours(values) {
-  const opdPoints = wholeNumber(values.opdPoints, "OPD points");
+  const opdPoints = points(values.opdPoints, "OPD points");
   if (opdPoints > MAX_OPD_POINTS) {
     throw new Error(`OPD points can't be more than ${MAX_OPD_POINTS}.`);
   }
