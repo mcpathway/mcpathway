@@ -280,6 +280,16 @@ export function renderReport(
   });
 
   resultsEl.addEventListener("click", async (event) => {
+    // "+N more" inside a group row: show or hide the rest of the names.
+    const expand = event.target.closest("[data-expand]");
+    if (expand) {
+      const box = expand.closest(".shared-who");
+      const open = box.classList.toggle("is-open");
+      box.querySelectorAll(".shared-more").forEach((item) => (item.hidden = !open));
+      expand.textContent = open ? "Show fewer ▴" : `+${expand.dataset.hidden} more ▾`;
+      return;
+    }
+
     const button = event.target.closest("[data-page]");
     if (!button) return;
 
@@ -307,7 +317,8 @@ export function renderReport(
   function exportAs(format) {
     return withEveryRow(async () => {
       const all = await report.loadAll({ ...filters });
-      const columns = visibleColumns();
+      // Columns marked screenOnly are short summaries for the screen; downloads get the full columns.
+      const columns = visibleColumns().filter((column) => !column.screenOnly);
       await onExport(format, {
         name: report.exportName(filters),
         headers: columns.map((column) => column.label),
@@ -413,7 +424,12 @@ function filterControl(filter, options, value) {
 }
 
 function cell(column, row) {
-  const raw = column.value(row);
+  // A column can build its own (already escaped) markup, for example a list of names.
+  if (column.html) {
+    return `<td data-label="${escapeHtml(column.label)}">${column.html(row)}</td>`;
+  }
+
+  const raw = column.display ? column.display(row) : column.value(row);
   const text = raw === null || raw === undefined ? "" : String(raw);
   const tag = column.tag?.(row);
 
