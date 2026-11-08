@@ -71,11 +71,6 @@ export function renderDashboard(
             <p>Estimate the OPD points for trainings attended.</p>
             <button class="button button-secondary button-small" id="open-opd" type="button">Open calculator</button>
           </article>
-          <article class="module-card"><h3>Record deletion</h3><p>${
-    isAdmin
-      ? "You can delete and restore members from the Members page."
-      : "Only the admin account can delete records."
-  }</p></article>
         </div>
       </main>
     </section>
