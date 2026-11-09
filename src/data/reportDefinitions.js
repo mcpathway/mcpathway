@@ -168,6 +168,17 @@ const expiringReport = {
       type: "checkbox",
       default: true,
     },
+    {
+      name: "separator",
+      label: "Separate copied addresses with",
+      type: "select",
+      default: "comma",
+      local: true,
+      options: [
+        ["comma", "Comma (Gmail, most apps)"],
+        ["semicolon", "Semicolon (Outlook)"],
+      ],
+    },
   ],
   async loadPage(filters, { page, pageSize }) {
     const today = todayParts();
@@ -215,6 +226,33 @@ const expiringReport = {
     { label: "Status", value: (r) => statusText(r.status), tag: (r) => statusTag(r.status) },
     { label: "Email", value: (r) => r.email ?? "" },
     { label: "Phone", value: (r) => r.phone ?? "" },
+  ],
+  actions: [
+    {
+      id: "copy-emails",
+      label: "Copy email addresses",
+      // Receives EVERY member in the report (not just the page on screen).
+      run(rows, filters) {
+        const list = uniqueEmails(rows);
+        if (!list.length) throw new Error("None of these members has an email address to copy.");
+
+        const withAddress = rows.filter((row) => String(row.email ?? "").trim()).length;
+        const duplicates = withAddress - list.length;
+        const without = rows.length - withAddress;
+        const separator = filters.separator === "semicolon" ? "; " : ", ";
+
+        const notes = [];
+        if (duplicates) notes.push(`${duplicates} duplicate ${plural(duplicates, "was", "were")} removed`);
+        if (without) notes.push(`${without} ${plural(without, "member has", "members have")} no email`);
+
+        return {
+          text: list.join(separator),
+          message: `Copied ${list.length} email ${plural(list.length, "address", "addresses")}${
+            notes.length ? ` (${notes.join("; ")})` : ""
+          }.`,
+        };
+      },
+    },
   ],
   exportName: (filters) =>
     filters.months === "0"
